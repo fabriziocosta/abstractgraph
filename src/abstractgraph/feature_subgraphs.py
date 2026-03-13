@@ -37,7 +37,7 @@ def feature_subgraphs(
             association = data.get("association")
             if label is None or association is None:
                 continue
-            association_hash = hash_graph.hash_graph(association, nbits=19)
+            association_hash = hash_graph(association, nbits=19)
             if association_hash in seen_hashes[label]:
                 continue
             seen_hashes[label].add(association_hash)

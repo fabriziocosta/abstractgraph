@@ -58,6 +58,29 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 - `notebooks/examples/` contains core usage examples.
 - `notebooks/research/` contains exploratory core notebooks.
 
+Recommended sequence:
+
+1. `notebooks/examples/example_abstract_graph_operators_01_unary_decompositions.ipynb`
+   Start with the core unary decomposition vocabulary.
+2. `notebooks/examples/example_abstract_graph_operators_02_composition_and_add.ipynb`
+   Learn composition order and additive unions.
+3. `notebooks/examples/example_abstract_graph_operators_03_filters_and_selection.ipynb`
+   Constrain decompositions with structural and label-based filters.
+4. `notebooks/examples/example_abstract_graph_operators_04_binary_and_combination_operators.ipynb`
+   Build new subgraphs from combinations and overlaps.
+5. `notebooks/examples/example_abstract_graph_operators_05_xml_and_operator_serialization.ipynb`
+   Serialize and round-trip operator pipelines.
+6. `notebooks/examples/example_abstract_graph_operators_06_vectorization_and_features.ipynb`
+   Convert abstract graphs into ML-ready feature matrices.
+7. `notebooks/examples/example_abstract_graph_operators_07_preprocessor_attention_pipeline.ipynb`
+   See how attention-derived preimage graphs feed into the same pipeline.
+8. `notebooks/examples/example_abstract_graph_operators_08_feature_inspection_and_subgraphs.ipynb`
+   Inspect which hashed feature labels correspond to which recurring subgraphs.
+
+Reference notebook:
+- `notebooks/examples/example_abstract_graph_operators_overview.ipynb`
+  Broad operator sampler kept as a compact survey after the staged sequence.
+
 ## Local validation
 
 ```bash

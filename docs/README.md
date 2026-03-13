@@ -90,3 +90,28 @@ direction.
 - [OPERATORS.md](OPERATORS.md)
 - [PREPROCESSOR.md](PREPROCESSOR.md)
 - [WHITE_PAPER.md](WHITE_PAPER.md)
+
+## Notebook sequence
+
+If you want a guided path through the package rather than a flat list of
+examples, use the staged notebook sequence in `notebooks/examples/`:
+
+1. `example_abstract_graph_operators_01_unary_decompositions.ipynb`
+   Unary decomposition primitives.
+2. `example_abstract_graph_operators_02_composition_and_add.ipynb`
+   Composition order and additive unions.
+3. `example_abstract_graph_operators_03_filters_and_selection.ipynb`
+   Structural filtering and selection.
+4. `example_abstract_graph_operators_04_binary_and_combination_operators.ipynb`
+   Combination, intersection, and binary operators.
+5. `example_abstract_graph_operators_05_xml_and_operator_serialization.ipynb`
+   XML serialization and round-trip of operator programs.
+6. `example_abstract_graph_operators_06_vectorization_and_features.ipynb`
+   Node-level and graph-level vectorization.
+7. `example_abstract_graph_operators_07_preprocessor_attention_pipeline.ipynb`
+   Attention-derived preimage graph construction and downstream handoff.
+8. `example_abstract_graph_operators_08_feature_inspection_and_subgraphs.ipynb`
+   Inspection of hashed feature labels via recurring representative subgraphs.
+
+The older `example_abstract_graph_operators_overview.ipynb` remains useful as a
+compact sampler, but it is no longer the best first notebook.
