@@ -1,0 +1,18 @@
+{
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/.github/**": true,
+    "**/.ipynb_checkpoints/**": true,
+    "**/notebooks/examples/.ipynb_backups/**": true,
+    "**/notebooks/research/.ipynb_backups/**": true,
+    "**/src/abstractgraph/__pycache__/**": true,
+    "**/src/abstractgraph.egg-info/**": true
+  },
+  "search.exclude": {
+    "**/.ipynb_checkpoints/**": true,
+    "**/notebooks/examples/.ipynb_backups/**": true,
+    "**/notebooks/research/.ipynb_backups/**": true,
+    "**/src/abstractgraph/__pycache__/**": true,
+    "**/src/abstractgraph.egg-info/**": true
+  }
+}
