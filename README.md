@@ -68,13 +68,15 @@ Recommended sequence:
    Constrain decompositions with structural and label-based filters.
 4. `notebooks/examples/example_abstract_graph_operators_04_binary_and_combination_operators.ipynb`
    Build new subgraphs from combinations and overlaps.
-5. `notebooks/examples/example_abstract_graph_operators_05_xml_and_operator_serialization.ipynb`
+5. `notebooks/examples/example_abstract_graph_operators_05_control_flow_and_conditionals.ipynb`
+   Learn how `if_then_else`, `if_then_elif_else`, `for_loop`, and `while_loop` turn pipelines into graph programs.
+6. `notebooks/examples/example_abstract_graph_operators_06_xml_and_operator_serialization.ipynb`
    Serialize and round-trip operator pipelines.
-6. `notebooks/examples/example_abstract_graph_operators_06_vectorization_and_features.ipynb`
+7. `notebooks/examples/example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Convert abstract graphs into ML-ready feature matrices.
-7. `notebooks/examples/example_abstract_graph_operators_07_preprocessor_attention_pipeline.ipynb`
+8. `notebooks/examples/example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
    See how attention-derived preimage graphs feed into the same pipeline.
-8. `notebooks/examples/example_abstract_graph_operators_08_feature_inspection_and_subgraphs.ipynb`
+9. `notebooks/examples/example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspect which hashed feature labels correspond to which recurring subgraphs.
 
 Reference notebook:

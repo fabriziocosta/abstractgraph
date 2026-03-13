@@ -104,13 +104,15 @@ examples, use the staged notebook sequence in `notebooks/examples/`:
    Structural filtering and selection.
 4. `example_abstract_graph_operators_04_binary_and_combination_operators.ipynb`
    Combination, intersection, and binary operators.
-5. `example_abstract_graph_operators_05_xml_and_operator_serialization.ipynb`
+5. `example_abstract_graph_operators_05_control_flow_and_conditionals.ipynb`
+   Control-flow operators for branching and bounded or predicate-driven iteration.
+6. `example_abstract_graph_operators_06_xml_and_operator_serialization.ipynb`
    XML serialization and round-trip of operator programs.
-6. `example_abstract_graph_operators_06_vectorization_and_features.ipynb`
+7. `example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Node-level and graph-level vectorization.
-7. `example_abstract_graph_operators_07_preprocessor_attention_pipeline.ipynb`
+8. `example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
    Attention-derived preimage graph construction and downstream handoff.
-8. `example_abstract_graph_operators_08_feature_inspection_and_subgraphs.ipynb`
+9. `example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspection of hashed feature labels via recurring representative subgraphs.
 
 The older `example_abstract_graph_operators_overview.ipynb` remains useful as a
