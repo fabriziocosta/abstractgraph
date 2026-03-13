@@ -1,5 +1,14 @@
 # Guiding Graph Learning with Interpretable Substructure Encodings
 
+This document is the conceptual background for the standalone `abstractgraph`
+core package and the split ecosystem around it.
+
+Package mapping:
+- `abstractgraph`: representation, operators, hashing, display, vectorization
+- `abstractgraph-ml`: estimators and analysis on top of those representations
+- `abstractgraph-generative`: rewriting and generation on top of those
+  representations
+
 ## Executive Summary
 
 Modern machine learning models can be accurate but remain difficult to inspect, debug, and correct at the mechanism level. This white paper introduces **Abstract Graphs** as a mechanistic intermediate representation (IR): a representation layer between raw structured data and predictive models where each variable corresponds to an explicit, inspectable subgraph predicate.

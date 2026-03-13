@@ -1,0 +1,841 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "0",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<style>.container { width:95% !important; }</style><style>.output_png {display: table-cell;text-align: center;vertical-align: middle;}</style>"
+      ],
+      "text/plain": [
+       "<IPython.core.display.HTML object>"
+      ]
+     },
+     "execution_count": 1,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "%matplotlib inline\n",
+    "%config InlineBackend.figure_format = 'retina'\n",
+    "%load_ext autoreload\n",
+    "%autoreload 2\n",
+    "import numpy as np\n",
+    "import scipy as sp\n",
+    "import pandas as pd\n",
+    "import networkx as nx\n",
+    "import random\n",
+    "import matplotlib.pyplot as plt\n",
+    "# import warnings filter\n",
+    "from warnings import simplefilter\n",
+    "# ignore all future warnings\n",
+    "simplefilter(action='ignore', category=FutureWarning)\n",
+    "from IPython.core.display import HTML\n",
+    "HTML('<style>.container { width:95% !important; }</style><style>.output_png {display: table-cell;text-align: center;vertical-align: middle;}</style>')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "1",
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "ModuleNotFoundError",
+     "evalue": "No module named 'abstractgraph.graphs'",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[31m---------------------------------------------------------------------------\u001b[39m",
+      "\u001b[31mModuleNotFoundError\u001b[39m                       Traceback (most recent call last)",
+      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[2]\u001b[39m\u001b[32m, line 1\u001b[39m\n\u001b[32m----> \u001b[39m\u001b[32m1\u001b[39m \u001b[38;5;28;01mfrom\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34;01mabstractgraph\u001b[39;00m\u001b[34;01m.\u001b[39;00m\u001b[34;01mgraphs\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[38;5;28;01mimport\u001b[39;00m AbstractGraph, graph_to_abstract_graph\n\u001b[32m      2\u001b[39m \u001b[38;5;28;01mfrom\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34;01mabstractgraph\u001b[39;00m\u001b[34;01m.\u001b[39;00m\u001b[34;01mdisplay\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[38;5;28;01mimport\u001b[39;00m display, display_graph, display_mappings, display_decomposition_graph, decomposition_to_graph\n\u001b[32m      3\u001b[39m \u001b[38;5;28;01mfrom\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34;01mabstractgraph\u001b[39;00m\u001b[34;01m.\u001b[39;00m\u001b[34;01mlabels\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[38;5;28;01mimport\u001b[39;00m graph_hash_label_function_factory\n",
+      "\u001b[31mModuleNotFoundError\u001b[39m: No module named 'abstractgraph.graphs'"
+     ]
+    }
+   ],
+   "source": [
+    "from abstractgraph.graphs import AbstractGraph, graph_to_abstract_graph\n",
+    "from abstractgraph.display import display, display_graph, display_mappings, display_decomposition_graph, decomposition_to_graph\n",
+    "from abstractgraph.labels import graph_hash_label_function_factory\n",
+    "from abstractgraph.operators import *\n",
+    "\n",
+    "def draw(graph, df, nbits=11):\n",
+    "    display_decomposition_graph(df)\n",
+    "    ag = graph_to_abstract_graph(graph, decomposition_function=df, nbits=nbits)\n",
+    "    display(ag, size=(12,6))\n",
+    "    display_mappings(ag, n_elements_per_row=10)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "USE_EXAMPLE = 'chemical' # 'random' or 'chemical'\n",
+    "\n",
+    "if USE_EXAMPLE == 'random':\n",
+    "    from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "    graph = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample(1)\n",
+    "else:\n",
+    "    smi = 'CC1NC(OC2CC(O)C3(CO)C4C(O)CC5(C)C(C6CNC(=O)C6)CCC5(O)C4CCC3(O)C2)C(O)C(O)C1O'\n",
+    "    from coco_grape.data_graphicalizer.mol.molecular_graphicalizer import SmilesMolecularGraphicalizer\n",
+    "    graph = SmilesMolecularGraphicalizer().transform([smi])[0]\n",
+    "    from coco_grape.visualizer.mol_display import draw_molecules\n",
+    "    draw_molecules([graph], n_graphs_per_line=1)\n",
+    "\n",
+    "print(graph)\n",
+    "\n",
+    "display_graph(graph)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), node())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), edge())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), random_part(n_samples=6))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), add(cycle(), tree()))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = path(number_of_edges=(2,3))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = union_of_shortest_paths(length=(3,5))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = neighborhood(radius=(0,1))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "10",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(neighborhood(radius=(0,1)), unlabel())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "11",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df1 = compose(neighborhood(radius=(0,1)), unlabel())\n",
+    "df2 = neighborhood(radius=(0,1))\n",
+    "df = add(df1, df2)\n",
+    "draw(graph, df) "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "12",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df2 = compose(prepend_label(label='2'), filter_by_number_of_nodes(number_of_nodes=2), tree())\n",
+    "df3 = compose(prepend_label(label='3'), filter_by_number_of_nodes(number_of_nodes=3), tree())\n",
+    "df4 = compose(prepend_label(label='4+'), filter_by_number_of_nodes(number_of_nodes=(4,100)), tree())\n",
+    "df1 = add(cycle(), df2, df3, df4)\n",
+    "df = compose(intersection_edges(), restore_label(), df1, unlabel())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "13",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df_list = [compose(combination(distance=d), node(), prepend_label(label=d)) for d in range(1,4)]\n",
+    "df = add(*df_list)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "31a2ebf8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(combination(number_of_elements=(2,3), distance=0), cycle(), unlabel())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "14",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = graphlet(radius=1, number_of_nodes=(3,4))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "15",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = betweenness_centrality(number_of_nodes=4)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0a64e82f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "core_df = compose(connected_component(), betweenness_centrality_split(number_of_nodes=9))\n",
+    "connector_df = compose(connected_component(), edge_complement(), merge(use_edges=True), core_df)\n",
+    "df = compose(intersection_edges(), remove_redundant_associations(), add(connector_df, core_df))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "16",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection(node_size=(3,5)), neighborhood(radius=2))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "17",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from abstractgraph.operators import *\n",
+    "n = 3\n",
+    "core_df = compose(connected_component(), betweenness_centrality(number_of_nodes=n))\n",
+    "peripheral_df = compose(connected_component(), complement(), betweenness_centrality(number_of_nodes=n))\n",
+    "centrality_df = add(peripheral_df,core_df)\n",
+    "\n",
+    "merged_centrality_df = add(\n",
+    "        compose(complement(), betweenness_centrality(number_of_nodes=n)),\n",
+    "        betweenness_centrality(number_of_nodes=n)\n",
+    "    )\n",
+    "\n",
+    "connector_df = compose(connected_component(), edge_complement(), merge(use_edges=True), merged_centrality_df)\n",
+    "df = compose(intersection_edges(), remove_redundant_associations(), add(connector_df, centrality_df))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "18",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df1 = compose(connected_component(), degree(value=(1,1)))\n",
+    "df2 = compose(connected_component(), degree(value=(2,2)))\n",
+    "df3 = compose(connected_component(), degree(value=(3,3)))\n",
+    "df4 = compose(connected_component(), degree(value=(4,10)))\n",
+    "df = compose(intersection_edges(accept_connection_by_edge=False), add(df1,df2,df3,df4))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "19",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(merge(), connected_component(), degree(value=(1,2)))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "20",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(complement(), cycle())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "21",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(filter_by_node_label(must_have_one_of=[0], cannot_have_any_in=[2]), neighborhood())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "22",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(filter_by_number_of_nodes(number_of_nodes=(2,3)), neighborhood())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "23",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(filter_by_number_of_edges(number_of_edges=(2,3)), neighborhood())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "24",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(filter_by_number_of_connected_components(number_of_components=(2,2)), combination(distance=(1,2)), edge())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "25",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(filter_by_number_of_connected_components(number_of_components=(1,1)), combination(distance=(1,2)), edge())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "26",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), add(cycle(),tree()))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "27",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(size_threshold=2), add(cycle(),tree()))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "28",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = clique(number_of_nodes=(1,4))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "29",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(combination(number_of_elements=(1,2),distance=(1,2)), neighborhood(radius=(0,1)))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "30",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#NSPPK\n",
+    "def make_nsppk(radius=1, distance=3, thickness=1):\n",
+    "    if thickness == 0:\n",
+    "        df = add(union_of_shortest_paths(length=distance), compose(combination(number_of_elements=2,distance=(0,distance)), neighborhood(radius=(0,radius))))\n",
+    "    elif thickness == 1:\n",
+    "        df = compose(combination(number_of_elements=2,distance=(0,distance)), neighborhood(radius=(0,radius)))\n",
+    "    else:\n",
+    "        raise Exception(f'thickness {thickness} is not allowed')\n",
+    "    return df\n",
+    "\n",
+    "df = make_nsppk(radius=1, distance=3, thickness=1)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "31",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(\n",
+    "    filter_by_number_of_connected_components(number_of_components=(2,3)), \n",
+    "    combination(number_of_elements=(2,3),distance=(1,2)), neighborhood(radius=(0,2)))\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "32",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Note: compose_product(binary_combination(distance=(0,1)), cycle(), tree()) computes cycle(Q) and tree(Q) on the same input and feeds both to binary_combination.\n",
+    "df = compose_product(binary_combination(distance=0), cycle(), tree())\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "33",
+   "metadata": {},
+   "source": [
+    "---"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "34",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "step1 = compose(connected_component(), complement(), betweenness_centrality(number_of_nodes=5))\n",
+    "\n",
+    "@curry\n",
+    "def number_of_image_graph_nodes_greater_then(abstract_graph, threshold=1):\n",
+    "    return number_of_image_graph_nodes(abstract_graph) > threshold\n",
+    "\n",
+    "workflow = compose(\n",
+    "    if_then_else(\n",
+    "        predicate=number_of_image_graph_nodes_greater_then(threshold=2),\n",
+    "        then_function=merge(),\n",
+    "        else_function=identity()\n",
+    "    ),\n",
+    "    step1,\n",
+    ")\n",
+    "draw(graph, workflow)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "35",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df1 = neighborhood()\n",
+    "df = for_loop(function=df1, n_iterations=3)\n",
+    "df = compose(deduplicate(), df)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "e816548a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from abstractgraph.operators import *\n",
+    "core_df = split(n_parts=5)\n",
+    "connector_df = compose(connected_component(), edge_complement(), merge(use_edges=True), core_df)\n",
+    "df = compose(intersection_edges(), add(connector_df, core_df))\n",
+    "\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "36",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "@curry\n",
+    "def number_of_image_graph_nodes_less_then(abstract_graph, threshold=1):\n",
+    "    return number_of_image_graph_nodes(abstract_graph) < threshold\n",
+    "\n",
+    "@curry\n",
+    "def number_of_subgraph_nodes_greater_then(abstract_graph, threshold=1):\n",
+    "    return max_number_of_subgraph_nodes(abstract_graph) >= threshold\n",
+    "\n",
+    "\n",
+    "core_df = forward_compose(\n",
+    "    while_loop(\n",
+    "        function=split(),\n",
+    "        predicate=number_of_subgraph_nodes_greater_then(threshold=5),\n",
+    "        max_iterations=10\n",
+    "    ),\n",
+    "    connected_component()\n",
+    ")\n",
+    "\n",
+    "connector_df = compose(connected_component(), edge_complement(), merge(use_edges=True), core_df)\n",
+    "df = compose(intersection_edges(), add(connector_df, core_df))\n",
+    "\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "37",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#decomposition used for feasibility filters\n",
+    "df1 = neighborhood(radius=1)\n",
+    "df2 = compose(cycle(), unlabel())\n",
+    "df3 = compose(filter_by_number_of_connected_components(number_of_components=1), combination(distance=0), compose(cycle(), unlabel()))\n",
+    "df = add(df1,df2,df3)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "38",
+   "metadata": {},
+   "source": [
+    "---"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "39",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "cycle_df = compose(filter_by_number_of_nodes(number_of_nodes=(5,6)), cycle())\n",
+    "cycle_with_N_df = compose(filter_by_node_label(must_have_one_of=['N']), cycle())\n",
+    "pairs_df = compose_product(binary_combination(distance=(1,4)), cycle_df, cycle_with_N_df)\n",
+    "df = compose(intersection_edges(), pairs_df)\n",
+    "draw(graph, df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "40",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Example ofthe XML rendering \n",
+    "\n",
+    "from abstractgraph.xml import register_from_module, operator_to_xml_string, operator_from_xml_string\n",
+    "import abstractgraph.operators as ag_ops\n",
+    "register_from_module(ag_ops)\n",
+    "xml_df = operator_to_xml_string(df, pretty=True)\n",
+    "print(xml_df)\n",
+    "\n",
+    "df_rt = operator_from_xml_string(xml_df)\n",
+    "draw(graph, df)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "41",
+   "metadata": {},
+   "source": [
+    "---"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "42",
+   "metadata": {},
+   "source": [
+    "# Vectorization"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "43",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from abstractgraph.graphs import AbstractGraph\n",
+    "from abstractgraph.vectorize import vectorize\n",
+    "from abstractgraph.operators import *\n",
+    "decomposition_function = add(node(), edge())\n",
+    "from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "graph = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample()\n",
+    "\n",
+    "ag = AbstractGraph(graph=graph).create_default_image_node()\n",
+    "ag = decomposition_function(ag)\n",
+    "X = vectorize(ag, nbits=10)\n",
+    "X.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "44",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from abstractgraph.vectorize import AbstractGraphTransformer\n",
+    "from abstractgraph.operators import *\n",
+    "from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "graphs = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample(1000)\n",
+    "df = neighborhood(radius=(0,2))\n",
+    "X = AbstractGraphTransformer(decomposition_function=df, nbits=10, n_jobs=-1).fit_transform(graphs)\n",
+    "X.shape"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "45",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from abstractgraph.vectorize import AbstractGraphNodeTransformer\n",
+    "from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "graphs = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample(1000)\n",
+    "df = neighborhood(radius=(0,2))\n",
+    "X_list = AbstractGraphNodeTransformer(decomposition_function=df, nbits=10, n_jobs=-1).fit_transform(graphs)\n",
+    "len(X_list), X_list[0].shape"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "46",
+   "metadata": {},
+   "source": [
+    "---"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "47",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "graphs = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample(5)\n",
+    "\n",
+    "from abstractgraph.operators import *\n",
+    "df = neighborhood(radius=2)\n",
+    "\n",
+    "from abstractgraph.feature_subgraphs import display_feature_subgraphs\n",
+    "display_feature_subgraphs(\n",
+    "    graphs=graphs,\n",
+    "    decomposition_function=df,\n",
+    "    nbits=3,\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "48",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "from coco_grape.utils.artificial_graph_constructor import RandomGraphConstructor\n",
+    "graphs = RandomGraphConstructor(integers_range=12, instance_size=40, alphabet_size=4, attribute_size=3).sample(100)\n",
+    "\n",
+    "from abstractgraph.operators import *\n",
+    "df = neighborhood(radius=2)\n",
+    "\n",
+    "from abstractgraph.feature_subgraphs import feature_subgraphs\n",
+    "\n",
+    "for nbits in range(6,12):\n",
+    "    label_map = feature_subgraphs(\n",
+    "        graphs=graphs,\n",
+    "        decomposition_function=df,\n",
+    "        nbits=nbits,\n",
+    "    )\n",
+    "    lens = [len(label_map[k]) for k in label_map]\n",
+    "    plt.figure(figsize=(7,3))\n",
+    "    plt.hist(lens,range(1,max(lens)))\n",
+    "    plt.xticks(range(1,max(lens)))\n",
+    "    plt.title(f'nbits:{nbits}')\n",
+    "    plt.xlabel('#collisions')\n",
+    "    plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "49",
+   "metadata": {},
+   "source": [
+    "# Meta analysis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "50",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = forward_compose(\n",
+    "    while_loop(\n",
+    "        function=split(),\n",
+    "        predicate=number_of_image_graph_nodes_less_then(threshold=5),\n",
+    "        max_iterations=10\n",
+    "    ),\n",
+    "    intersection_edges(accept_connection_by_edge=True)\n",
+    ")\n",
+    "\n",
+    "display_decomposition_graph(decomposition_to_graph(df))\n",
+    "\n",
+    "G = decomposition_to_graph(df)\n",
+    "nx.draw(G)\n",
+    "\n",
+    "print('-'*100)\n",
+    "print('Nodes')\n",
+    "for u in G.nodes():\n",
+    "    print(u,G.nodes[u])\n",
+    "print('-'*100)\n",
+    "print('Edges')\n",
+    "for u,v in G.edges():\n",
+    "    print('%s -> %s [%s]'%(u,v,G.edges[u,v]))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "51",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = compose(intersection_edges(), add(cycle(),tree()))\n",
+    "draw(nx.Graph(G), df)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "52",
+   "metadata": {},
+   "source": [
+    "---"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "py312",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.12"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
