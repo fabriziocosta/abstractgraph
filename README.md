@@ -9,7 +9,8 @@ An Abstract Graph has two levels:
 
 This repo contains the core abstractions and utilities only. Estimators live in
 `abstractgraph-ml`. Generators and story-graph tooling live in
-`abstractgraph-generative`.
+`abstractgraph-generative`. Raw-data-to-graph graphicalizers now live in
+`abstractgraph-graphicalizer`.
 
 ## Ecosystem
 
@@ -41,7 +42,8 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 - `src/abstractgraph/vectorize.py`
   Graph- and node-level vectorizers.
 - `src/abstractgraph/preprocessor.py`
-  Attention-derived preimage graph preprocessor.
+  Compatibility shim that re-exports the extracted preprocessor classes from
+  `abstractgraph-graphicalizer`.
 - `src/abstractgraph/to_graph/`
   Adapters that build base graphs from external data.
 
@@ -77,7 +79,8 @@ Recommended sequence:
 7. `notebooks/examples/example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Convert abstract graphs into ML-ready feature matrices.
 8. `notebooks/examples/example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
-   See how attention-derived preimage graphs feed into the same pipeline.
+   See how `abstractgraph-graphicalizer` attention backends feed preimage
+   graphs into the same pipeline.
 9. `notebooks/examples/example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspect which hashed feature labels correspond to which recurring subgraphs.
 
@@ -88,6 +91,7 @@ Reference notebook:
 ## Local validation
 
 ```bash
+python -m pip install -e ../abstractgraph-graphicalizer --no-deps
 python -m pip install -e . --no-deps
 python scripts/smoke_test.py
 ```

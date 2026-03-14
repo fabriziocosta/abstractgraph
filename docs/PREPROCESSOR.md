@@ -1,10 +1,14 @@
-# Preprocessor in `abstractgraph`
+# Preprocessor migration
 
-The preprocessor module provides an attention-driven way to build preimage
-graphs from token-level inputs without first defining explicit symbolic graph
-operators.
+The attention-driven preprocessor has been extracted from `abstractgraph` into
+`abstractgraph-graphicalizer`.
 
-In the standalone package it lives in:
+Use the new import path:
+
+- `abstractgraph_graphicalizer.attention`
+
+The old import path remains available temporarily through a compatibility shim:
+
 - `abstractgraph.preprocessor`
 
 ## What it produces
@@ -33,6 +37,8 @@ ag = AbstractGraph(graph=preimage_graph)
 ## Position in the split repos
 
 - `abstractgraph`
+  keeps a temporary compatibility shim only
+- `abstractgraph-graphicalizer`
   owns the preprocessor implementation
 - `abstractgraph-ml`
   can consume graphs or derived features downstream
@@ -43,7 +49,7 @@ ag = AbstractGraph(graph=preimage_graph)
 
 ```python
 import numpy as np
-from abstractgraph.preprocessor import AbstractGraphPreprocessor
+from abstractgraph_graphicalizer.attention import AbstractGraphPreprocessor
 
 X = [np.random.randn(12, 16), np.random.randn(10, 16)]
 y = [0, 1]

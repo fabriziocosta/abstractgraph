@@ -23,7 +23,8 @@ Recommended sequence:
 - `examples/example_abstract_graph_operators_07_vectorization_and_features.ipynb`
   Step 7: node-level vectorization, graph-level aggregation, and batch transformers.
 - `examples/example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
-  Step 8: attention-derived preimage graph construction and handoff into operators.
+  Step 8: attention-derived preimage graph construction through
+  `abstractgraph-graphicalizer` and handoff into operators.
 - `examples/example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
   Step 9: inspect hashed feature labels by mapping them back to representative subgraphs.
 

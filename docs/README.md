@@ -20,7 +20,6 @@ The core package is responsible for:
 - serializing operator pipelines
 - visualizing graph structures and decompositions
 - hashing and vectorizing subgraph structure
-- building attention-derived preimage graphs
 - adapting non-graph inputs into base NetworkX graphs
 
 ## Ecosystem
@@ -33,6 +32,8 @@ Sibling repositories:
   Path: `/home/fabrizio/work/abstractgraph-ml`
 - `abstractgraph-generative`
   Path: `/home/fabrizio/work/abstractgraph-generative`
+- `abstractgraph-graphicalizer`
+  Path: `/home/fabrizio/work/abstractgraph-graphicalizer`
 
 See [../ECOSYSTEM.md](../ECOSYSTEM.md) for the install order and dependency
 direction.
@@ -54,7 +55,7 @@ direction.
 - `abstractgraph.vectorize`
   graph-level and node-level vectorizers
 - `abstractgraph.preprocessor`
-  attention-driven preimage graph builder
+  compatibility re-export of the extracted attention graphicalizer backend
 - `abstractgraph.feature_subgraphs`
   feature-to-subgraph inspection helpers
 - `abstractgraph.utils`
@@ -111,7 +112,8 @@ examples, use the staged notebook sequence in `notebooks/examples/`:
 7. `example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Node-level and graph-level vectorization.
 8. `example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
-   Attention-derived preimage graph construction and downstream handoff.
+   Attention-derived preimage graph construction through
+   `abstractgraph-graphicalizer` and downstream handoff.
 9. `example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspection of hashed feature labels via recurring representative subgraphs.
 

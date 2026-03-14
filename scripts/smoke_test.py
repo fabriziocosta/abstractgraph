@@ -7,6 +7,7 @@ import networkx as nx
 
 from abstractgraph import operators as ops
 from abstractgraph.graphs import AbstractGraph
+from abstractgraph.preprocessor import AbstractGraphPreprocessor
 from abstractgraph.vectorize import vectorize
 
 
@@ -25,6 +26,7 @@ def main() -> None:
     abstract_graph.update()
     matrix = vectorize(abstract_graph, nbits=8, return_dense=True)
     print("vectorized_shape", matrix.shape)
+    print("preprocessor_import", AbstractGraphPreprocessor.__name__)
 
 
 if __name__ == "__main__":
