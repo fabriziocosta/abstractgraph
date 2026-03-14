@@ -57,6 +57,8 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 
 - `notebooks/examples/` contains core usage examples.
 - `notebooks/research/` contains exploratory core notebooks.
+- Example and research notebooks now bootstrap imports and normalize the
+  working directory automatically for the standard three-repo ecosystem layout.
 
 Recommended sequence:
 

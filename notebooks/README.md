@@ -30,3 +30,9 @@ Recommended sequence:
 Reference notebook:
 - `examples/example_abstract_graph_operators_overview.ipynb`
   Broad operator sampler covering unary, compositional, filtering, XML, and meta operators.
+
+Bootstrap behavior:
+- Notebooks use `notebooks/_bootstrap.py` to locate the repo root.
+- They prepend available sibling `src/` directories to `sys.path`.
+- They normalize the working directory to the repo root so relative paths are
+  stable across Jupyter launch locations.
