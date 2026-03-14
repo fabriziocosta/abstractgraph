@@ -5,11 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "abstractgraph"
 version = "0.1.0"
-description = "Core AbstractGraph definitions, hashing, operators, XML, vectorization, display, and compatibility shims."
+description = "Core AbstractGraph definitions, hashing, operators, XML, vectorization, and display."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "abstractgraph-graphicalizer>=0.1.0",
   "networkx>=3.0",
   "numpy>=1.24",
   "scikit-learn>=1.3",

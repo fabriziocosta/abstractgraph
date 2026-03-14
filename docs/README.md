@@ -54,8 +54,6 @@ direction.
   rendering for base graphs, abstract graphs, mappings, and operator DAGs
 - `abstractgraph.vectorize`
   graph-level and node-level vectorizers
-- `abstractgraph.preprocessor`
-  compatibility re-export of the extracted attention graphicalizer backend
 - `abstractgraph.feature_subgraphs`
   feature-to-subgraph inspection helpers
 - `abstractgraph.utils`
@@ -89,7 +87,6 @@ direction.
 ## Related docs
 
 - [OPERATORS.md](OPERATORS.md)
-- [PREPROCESSOR.md](PREPROCESSOR.md)
 - [WHITE_PAPER.md](WHITE_PAPER.md)
 
 ## Notebook sequence

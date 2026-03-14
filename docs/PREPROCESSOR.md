@@ -1,15 +1,10 @@
-# Preprocessor migration
+# Preprocessor
 
-The attention-driven preprocessor has been extracted from `abstractgraph` into
-`abstractgraph-graphicalizer`.
+The attention-driven preprocessor lives in `abstractgraph-graphicalizer`.
 
-Use the new import path:
+Use:
 
 - `abstractgraph_graphicalizer.attention`
-
-The old import path remains available temporarily through a compatibility shim:
-
-- `abstractgraph.preprocessor`
 
 ## What it produces
 
@@ -36,8 +31,6 @@ ag = AbstractGraph(graph=preimage_graph)
 
 ## Position in the split repos
 
-- `abstractgraph`
-  keeps a temporary compatibility shim only
 - `abstractgraph-graphicalizer`
   owns the preprocessor implementation
 - `abstractgraph-ml`

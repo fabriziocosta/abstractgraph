@@ -14,7 +14,7 @@ This repo contains the core abstractions and utilities only. Estimators live in
 
 ## Ecosystem
 
-This repo is one part of a three-repo stack:
+This repo is one part of a four-repo stack:
 
 - `abstractgraph`
   Path: `/home/fabrizio/work/abstractgraph`
@@ -22,6 +22,8 @@ This repo is one part of a three-repo stack:
   Path: `/home/fabrizio/work/abstractgraph-ml`
 - `abstractgraph-generative`
   Path: `/home/fabrizio/work/abstractgraph-generative`
+- `abstractgraph-graphicalizer`
+  Path: `/home/fabrizio/work/abstractgraph-graphicalizer`
 
 See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 
@@ -41,9 +43,6 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
   Visualization for graphs, mappings, and operator pipelines.
 - `src/abstractgraph/vectorize.py`
   Graph- and node-level vectorizers.
-- `src/abstractgraph/preprocessor.py`
-  Compatibility shim that re-exports the extracted preprocessor classes from
-  `abstractgraph-graphicalizer`.
 - `src/abstractgraph/to_graph/`
   Adapters that build base graphs from external data.
 
@@ -51,7 +50,6 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 
 - [docs/README.md](docs/README.md)
 - [docs/OPERATORS.md](docs/OPERATORS.md)
-- [docs/PREPROCESSOR.md](docs/PREPROCESSOR.md)
 - [docs/WHITE_PAPER.md](docs/WHITE_PAPER.md)
 - [ECOSYSTEM.md](ECOSYSTEM.md)
 
@@ -60,7 +58,7 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 - `notebooks/examples/` contains core usage examples.
 - `notebooks/research/` contains exploratory core notebooks.
 - Example and research notebooks now bootstrap imports and normalize the
-  working directory automatically for the standard three-repo ecosystem layout.
+  working directory automatically for the standard ecosystem layout.
 
 Recommended sequence:
 
@@ -91,7 +89,6 @@ Reference notebook:
 ## Local validation
 
 ```bash
-python -m pip install -e ../abstractgraph-graphicalizer --no-deps
 python -m pip install -e . --no-deps
 python scripts/smoke_test.py
 ```
