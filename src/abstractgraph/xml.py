@@ -9,11 +9,14 @@ Features
 - Pluggable registries to resolve operators and combiners.
 
 Usage
-    from coco_grape.module.abstract_graph import operator as qg_ops
-    from coco_grape.module.abstract_graph.abstract_graph_xml import register_from_module,
-        operator_to_xml_string, operator_from_xml_string
+    import abstractgraph.operators as ops
+    from abstractgraph.xml import (
+        register_from_module,
+        operator_to_xml_string,
+        operator_from_xml_string,
+    )
 
-    register_from_module(qg_ops)
+    register_from_module(ops)
     xml = operator_to_xml_string(pipeline)
     pipeline2 = operator_from_xml_string(xml)
 """
