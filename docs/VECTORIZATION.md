@@ -72,7 +72,7 @@ Important implementation detail:
 
 The reserved columns are used later for:
 
-- column `0`: bias term
+- column `0`: constant node-existence feature
 - column `1`: base-node degree
 
 This means the structural hashed features start at column `2`.
@@ -116,9 +116,21 @@ starts from `to_array()` and then overwrites the first two columns:
 
 The result is a node-feature matrix where each row contains:
 
-- a bias feature
+- a constant node-existence feature
 - a local structural baseline from graph degree
 - hashed counts of interpreted subgraphs touching that node
+
+Column `0` matters for two reasons.
+
+First, when node rows are pooled into a graph-level vector, summing that column
+produces the number of instantiated nodes in the graph. So column `0` is not
+just an abstract intercept term; it is also a direct graph-size feature under
+sum pooling.
+
+Second, in generative settings this column can act as a node-existence signal.
+When a model allocates a fixed maximum number of node slots and uses padding,
+column `0` helps distinguish actual instantiated nodes from empty or inactive
+slots.
 
 This is the main node-level representation used by the library.
 
