@@ -55,6 +55,7 @@ __all__ = [
     "display_graphs",
     "display_mappings",
     "display_decomposition_graph",
+    "remove_redundant_mapped_subgraphs",
     "number_of_interpretation_graph_nodes",
     "number_of_interpretation_graph_edges",
 ]

@@ -63,12 +63,13 @@ direction.
 
 ## Key concepts
 
-- Preimage graph:
+- Base graph:
   the original NetworkX graph
-- Image graph:
-  a graph whose nodes store associated subgraphs of the preimage
-- Association:
-  the subgraph stored on an image node, usually in `node['association']`
+- Interpretation graph:
+  a graph whose nodes store mapped base subgraphs
+- Mapped subgraph:
+  the base subgraph stored on an interpretation node, canonically in
+  `node['mapped_subgraph']`
 - Operator:
   a pure `AbstractGraph -> AbstractGraph` transformation
 - Vectorization:
@@ -110,7 +111,7 @@ examples, use the staged notebook sequence in `notebooks/examples/`:
 7. `example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Node-level and graph-level vectorization.
 8. `example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
-   Attention-derived preimage graph construction through
+   Attention-derived base-graph construction through
    `abstractgraph-graphicalizer` and downstream handoff.
 9. `example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspection of hashed feature labels via recurring representative subgraphs.

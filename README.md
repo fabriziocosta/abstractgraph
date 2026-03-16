@@ -4,8 +4,8 @@
 visualizing, and vectorizing Abstract Graphs.
 
 An Abstract Graph has two levels:
-- a preimage graph: the original NetworkX graph
-- an image graph: nodes that represent associated subgraphs of the preimage
+- a base graph: the original NetworkX graph
+- an interpretation graph: nodes that represent mapped subgraphs of the base graph
 
 This repo contains the core abstractions and utilities only. Estimators live in
 `abstractgraph-ml`. Generators and story-graph tooling live in
@@ -78,7 +78,7 @@ Recommended sequence:
 7. `notebooks/examples/example_abstract_graph_operators_07_vectorization_and_features.ipynb`
    Convert abstract graphs into ML-ready feature matrices.
 8. `notebooks/examples/example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
-   See how `abstractgraph-graphicalizer` attention backends feed preimage
+   See how `abstractgraph-graphicalizer` attention backends feed base
    graphs into the same pipeline.
 9. `notebooks/examples/example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
    Inspect which hashed feature labels correspond to which recurring subgraphs.

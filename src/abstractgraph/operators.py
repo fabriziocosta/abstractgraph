@@ -207,10 +207,10 @@ def add(*decomposition_functions, dedup: bool = True):
     Build an operator that adds (unions) the outputs of multiple decomposition functions.
     """
     def composed(abstract_graph: 'AbstractGraph'):
-        """Additive composition of decomposition outputs over a shared preimage graph.
+        """Additive composition of decomposition outputs over a shared base graph.
         Summary
             Given one AbstractGraph, run several decomposition functions on it and
-            add their resulting quotient graphs together using the graph’s `+`
+            add their resulting interpretation graphs together using the graph’s `+`
             semantics, producing a single aggregate AbstractGraph.
 
         Semantics
@@ -219,8 +219,8 @@ def add(*decomposition_functions, dedup: bool = True):
                 decompositions; reads its `label_function`, `attribute_function`,
                 and `edge_function` to seed the result.
             - Output AG state:
-                Returns a new AbstractGraph whose image graph is the additive
-                combination of all per-function outputs; the preimage graph is
+                Returns a new AbstractGraph whose interpretation graph is the additive
+                combination of all per-function outputs; the base graph is
                 aligned with the input (as defined by `__add__` on AbstractGraph).
             - Determinism:
                 Deterministic given the input graph and the ordered list of
@@ -248,7 +248,7 @@ def add(*decomposition_functions, dedup: bool = True):
             Let m be the number of functions, T_f the cost of each decomposition,
             and A the cost of a `+` merge:
               - Time:  Σ T_f  +  (m − 1)·A
-              - Memory: proportional to the size of the union of image-node sets and
+              - Memory: proportional to the size of the union of interpretation-node sets and
                 any metadata/materialised edges produced by the functions.
 
         Interactions
@@ -256,7 +256,7 @@ def add(*decomposition_functions, dedup: bool = True):
               `connected_components_decomposition`, `cycle_decomposition`,
               `clique_decomposition`, `filter_by_*`.
             - Often followed by consolidation steps like `deduplicate`, `merge`,
-              or `project` to normalise/aggregate overlapping image nodes.
+              or `project` to normalise/aggregate overlapping interpretation nodes.
             - Order matters if `+` is not strictly commutative/associative in the
               implementation (e.g., metadata precedence rules).
 
@@ -279,10 +279,10 @@ def add(*decomposition_functions, dedup: bool = True):
         Failure Modes
             - Empty input list (`add()` with no functions) returns a base/empty
               quotient graph carrying only operator settings.
-            - Incompatible outputs: if `__add__` requires matched preimage graphs
+            - Incompatible outputs: if `__add__` requires matched base graphs
               or settings, and a decomposition violates those assumptions, a merge
               error may occur.
-            - Non-idempotent `+`: repeated addition of overlapping image nodes may
+            - Non-idempotent `+`: repeated addition of overlapping interpretation nodes may
               duplicate structures unless `__add__` handles deduplication.
             - Exceptions raised in any decomposition function propagate to the caller.
         """
@@ -616,7 +616,7 @@ def if_then_else(
         - Can emulate “switch”-style logic when nested.
 
     Examples
-        # Branch by number of image nodes
+        # Branch by number of interpretation nodes
         workflow = forward_compose(
             connected_component(),
             if_then_else(
@@ -699,7 +699,7 @@ def if_then_elif_else(
         - Often combined with threshold-based or structural tests on graphs.
 
     Examples
-        # Branch by number of image nodes with multiple conditions
+        # Branch by number of interpretation nodes with multiple conditions
         workflow = forward_compose(
             connected_component(),
             if_then_elif_else(
@@ -901,7 +901,7 @@ def identity(
         - Input AG state:
             Accepts a AbstractGraph and creates a new wrapper that references it.
         - Output AG state:
-            Equivalent to the input graph; no modification to preimage/image graphs.
+            Equivalent to the input graph; no modification to the base or interpretation graph.
         - Determinism:
             Deterministic (output always mirrors input).
 
@@ -956,16 +956,16 @@ def random_part(
     abstract_graph: 'AbstractGraph',
     n_samples=1
     ) -> 'AbstractGraph':
-    """Emit bootstrapped random subgraphs from each associated subgraph.
+    """Emit bootstrapped random subgraphs from each mapped subgraph.
     Summary
-        For each associated subgraph, draw bootstrap samples of its nodes (with replacement),
+        For each mapped subgraph, draw bootstrap samples of its nodes (with replacement),
         induce subgraphs on the sampled node sets, and keep only the largest connected component.
-        Repeat this process n_samples times per association.
+        Repeat this process n_samples times per interpretation node.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph and current image-node associations.
-        - Output AG state: Returns a new AbstractGraph with one image node per bootstrap sample,
-          each associating to the largest connected component of the sampled-induced subgraph.
+        - Input AG state: Reads abstract_graph.base_graph and current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph with one interpretation node per bootstrap sample,
+          each mapped to the largest connected component of the sampled-induced subgraph.
         - Determinism: Non-deterministic due to random sampling.
 
     Parameters
@@ -977,7 +977,7 @@ def random_part(
             * Sample |V| nodes with replacement.
             * Take the unique set of sampled nodes.
             * Induce the subgraph on that set and keep its largest connected component.
-            * Emit one image node for each sample.
+            * Emit one interpretation node for each sample.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -1018,15 +1018,15 @@ def node(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit one image node for each singleton vertex contained in the current image-node associations.
+    """Emit one interpretation node for each singleton vertex in the current mapped subgraphs.
     Summary
-        For every subgraph associated with an image node, decompose it into its constituent single vertices and
-        create one new image node per vertex. Each new image node associates to an induced subgraph consisting
+        For every mapped subgraph, decompose it into its constituent single vertices and
+        create one new interpretation node per vertex. Each new interpretation node maps to an induced subgraph consisting
         of exactly that one vertex.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph and all current image-node associations.
-        - Output AG state: Returns a new AbstractGraph with the same preimage_graph and an image_graph in which
+        - Input AG state: Reads abstract_graph.base_graph and all current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph with the same base graph and an interpretation graph in which
           each node corresponds to a singleton subgraph {v}. Provenance metadata is stored for traceability.
         - Determinism: Deterministic given the input graph; order of singleton emission is not semantically significant.
 
@@ -1035,20 +1035,20 @@ def node(
             Placeholder argument for interface consistency. Ignored.
 
     Algorithm
-        - Initialize a fresh AbstractGraph with the same preimage_graph.
-        - For each subgraph in get_image_nodes_associations():
+        - Initialize a fresh AbstractGraph with the same base graph.
+        - For each mapped subgraph:
             * Iterate over all its nodes.
             * For each node, create a singleton subgraph [{node}].
-            * Call create_image_node_with_subgraph_from_nodes(singleton, meta=build_meta_from_function_context()).
+            * Call create_interpretation_node_with_subgraph_from_nodes(singleton, meta=build_meta_from_function_context()).
 
     Complexity
-        Let S be the number of associations, and N_i their node counts.
-        Time: Σ_i O(N_i) to iterate and create singleton image nodes.
+        Let S be the number of mapped subgraphs, and N_i their node counts.
+        Time: Σ_i O(N_i) to iterate and create singleton interpretation nodes.
         Memory: O(total number of nodes) for storing singletons.
 
     Side Effects & Metadata
-        - Each created image node stores:
-            * 'association': a subgraph containing a single vertex from the preimage.
+        - Each created interpretation node stores:
+            * 'mapped_subgraph': a subgraph containing a single vertex from the base graph.
             * 'meta': {'source_function': 'node', 'params': {...}} from build_meta_from_function_context().
         - Labels/attributes are not computed here; call update() to populate them.
 
@@ -1058,12 +1058,12 @@ def node(
         - Composes naturally with `neighborhood` to generate ego-graphs around individual nodes.
 
     Constraints & Invariants
-        - Works with any undirected or directed preimage graph.
-        - Emits exactly one singleton per node in each input association.
-        - If the association is empty, no image nodes are created.
+        - Works with any undirected or directed base graph.
+        - Emits exactly one singleton per node in each input mapped subgraph.
+        - If a mapped subgraph is empty, no interpretation nodes are created.
 
     Examples
-        # Break graph into singleton image nodes
+        # Break graph into singleton interpretation nodes
         workflow = forward_compose(node())
         Q2 = workflow(Q).update()
 
@@ -1072,12 +1072,12 @@ def node(
         Q2 = workflow(Q).update()
 
     Domain Analogies
-        - Social networks: one feature node per individual user.
-        - Computer networks: one feature node per device.
-        - Chemistry: one feature node per atom in a molecule.
+        - Social networks: one interpretation node per individual user.
+        - Computer networks: one interpretation node per device.
+        - Chemistry: one interpretation node per atom in a molecule.
 
     Failure Modes & Diagnostics
-        - Potential explosion in image node count for very large graphs; mitigate with sampling or filters.
+        - Potential explosion in interpretation-node count for very large graphs; mitigate with sampling or filters.
         - Ensure downstream operators handle large numbers of singletons efficiently.
     """
     out_abstract_graph = AbstractGraph(
@@ -1103,15 +1103,15 @@ def edge(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit one image node for each edge contained in the current image-node associations.
+    """Emit one interpretation node for each edge in the current mapped subgraphs.
     Summary
-        For every subgraph associated with an image node, decompose it into its constituent edges and
-        create one new image node per edge. Each new image node associates to the induced subgraph
+        For every mapped subgraph, decompose it into its constituent edges and
+        create one new interpretation node per edge. Each new interpretation node maps to the induced subgraph
         consisting of exactly the two incident vertices and their connecting edge.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph and all current image-node associations.
-        - Output AG state: Returns a new AbstractGraph with the same preimage_graph and an image_graph in which
+        - Input AG state: Reads abstract_graph.base_graph and all current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph with the same base graph and an interpretation graph in which
           each node corresponds to a single edge subgraph. Provenance metadata is attached for traceability.
         - Determinism: Deterministic given the input graph; order of edge emission is not semantically significant.
 
@@ -1120,20 +1120,20 @@ def edge(
             Placeholder argument for interface consistency. Ignored.
 
     Algorithm
-        - Initialize a fresh AbstractGraph with the same preimage_graph.
-        - For each subgraph in get_image_nodes_associations():
+        - Initialize a fresh AbstractGraph with the same base graph.
+        - For each mapped subgraph:
             * Iterate over its edge list.
             * For each edge (u, v), build a 2-node induced subgraph {u, v} with the connecting edge.
-            * Call create_image_node_with_subgraph_from_nodes(edge, meta=build_meta_from_function_context()).
+            * Call create_interpretation_node_with_subgraph_from_nodes(edge, meta=build_meta_from_function_context()).
 
     Complexity
-        Let S be the number of associations, and E_i their edge counts.
-        Time: Σ_i O(E_i) to iterate and create edge-based image nodes.
+        Let S be the number of mapped subgraphs, and E_i their edge counts.
+        Time: Σ_i O(E_i) to iterate and create edge-based interpretation nodes.
         Memory: O(total number of edges) for storing induced 2-node subgraphs.
 
     Side Effects & Metadata
-        - Each created image node stores:
-            * 'association': a subgraph with exactly 2 vertices and 1 edge.
+        - Each created interpretation node stores:
+            * 'mapped_subgraph': a subgraph with exactly 2 vertices and 1 edge.
             * 'meta': {'source_function': 'edge', 'params': {...}} from build_meta_from_function_context().
         - Labels/attributes are not computed here; call update() to populate them.
 
@@ -1144,8 +1144,8 @@ def edge(
 
     Constraints & Invariants
         - Works with undirected and directed graphs (edges will reflect graph type).
-        - Emits exactly one 2-node subgraph per edge in each input association.
-        - If the association has no edges, no image nodes are created.
+        - Emits exactly one 2-node subgraph per edge in each input mapped subgraph.
+        - If a mapped subgraph has no edges, no interpretation nodes are created.
 
     Examples
         # Break graph into edge subgraphs
@@ -1162,7 +1162,7 @@ def edge(
         - Chemistry: one feature node per bond between two atoms.
 
     Failure Modes & Diagnostics
-        - Explosion in image node count for dense graphs (O(n^2) edges). Use filters or degree constraints upstream.
+        - Explosion in interpretation-node count for dense graphs (O(n^2) edges). Use filters or degree constraints upstream.
         - Directed graphs yield ordered edge pairs; ensure downstream operators handle orientation if relevant.
     """
     out_abstract_graph = AbstractGraph(
@@ -1204,16 +1204,16 @@ def connected_component(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit one image node per connected component from each associated subgraph in the current quotient graph.
+    """Emit one interpretation node per connected component in each mapped subgraph.
     Summary
-        For every image-node association (subgraph), compute its connected components and create one new image node
-        per component, preserving the original preimage graph and adding provenance metadata.
+        For every mapped subgraph, compute its connected components and create one new interpretation node
+        per component, preserving the original base graph and adding provenance metadata.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph (as the base) and all current image-node associations.
-        - Output AG state: Returns a new AbstractGraph with the same preimage_graph and an image_graph whose nodes
-          each associate to a connected component (node-induced subgraph) of the original associations.
-          Invariants: preimage_graph unchanged; newly created image nodes have 'association' set and 'meta' populated.
+        - Input AG state: Reads abstract_graph.base_graph and all current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph with the same base graph and an interpretation graph whose nodes
+          each map to a connected component (node-induced subgraph) of the original mapped subgraphs.
+          Invariants: base graph unchanged; newly created interpretation nodes have `mapped_subgraph` set and `meta` populated.
         - Determinism: Deterministic given inputs; the order of emitted components is not semantically significant.
 
     Parameters
@@ -1221,20 +1221,20 @@ def connected_component(
             Unused placeholder to keep a uniform operator signature. Ignored.
 
     Algorithm
-        - Initialize `out_abstract_graph` with the same preimage_graph.
-        - For each associated subgraph in `abstract_graph.get_image_nodes_associations()`:
+        - Initialize `out_abstract_graph` with the same base graph.
+        - For each mapped subgraph:
             * Compute components = connected_component_decomposition_function(subgraph).
             * For each component (set of nodes), call
-              `create_image_node_with_subgraph_from_nodes(component, meta=build_meta_from_function_context())`.
+              `create_interpretation_node_with_subgraph_from_nodes(component, meta=build_meta_from_function_context())`.
 
     Complexity
-        Let S be the number of input associations and (V_i, E_i) their sizes.
-        Time: Σ_i O(|V_i| + |E_i|) for components + overhead to create image nodes.
+        Let S be the number of input mapped subgraphs and (V_i, E_i) their sizes.
+        Time: Σ_i O(|V_i| + |E_i|) for components + overhead to create interpretation nodes.
         Memory: O(total emitted nodes + edges) across all component subgraphs.
 
     Side Effects & Metadata
-        - Each created image node stores:
-            * 'association' : induced subgraph on the component’s node set.
+        - Each created interpretation node stores:
+            * `mapped_subgraph` : induced subgraph on the component’s node set.
             * 'meta' : {'source_function': 'connected_component', 'params': {...}} via build_meta_from_function_context().
         - Labels/attributes are not computed here; call `update()` later if needed.
 
@@ -1243,11 +1243,11 @@ def connected_component(
         - Composes well with `add`, `product`, and distance-based combinators after reducing to components.
 
     Constraints & Invariants
-        - Assumes associations are undirected or that connectedness is well-defined for them.
-        - Empty associations emit no components.
+        - Assumes mapped subgraphs are undirected or that connectedness is well-defined for them.
+        - Empty mapped subgraphs emit no components.
 
     Examples
-        # Minimal: break current associations into components
+        # Minimal: break current mapped subgraphs into components
         workflow = forward_compose(connected_component())
         Q2 = workflow(Q).update()
 
@@ -1263,9 +1263,9 @@ def connected_component(
         - Chemistry: separate disconnected fragments in a selected molecular region.
 
     Failure Modes & Diagnostics
-        - If associations are directed graphs, nx.connected_components may fail; ensure associations are undirected
+        - If mapped subgraphs are directed graphs, nx.connected_components may fail; ensure they are undirected
           or convert appropriately upstream.
-        - Excessive instance counts if the input associations are highly fragmented; mitigate with size filters.
+        - Excessive instance counts if the input mapped subgraphs are highly fragmented; mitigate with size filters.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -1313,15 +1313,15 @@ def degree(
     abstract_graph: 'AbstractGraph',
     value = (0,2)
     ) -> 'AbstractGraph':
-    """Emit one image node per subgraph containing all vertices whose degree lies within given bounds.
+    """Emit one interpretation node per degree-filtered mapped subgraph.
     Summary
-        For every image-node association, select the subset of its vertices whose degree is between the
-        specified bounds, and create a new image node whose association is induced on that node set.
+        For every mapped subgraph, select the subset of its vertices whose degree is between the
+        specified bounds, and create a new interpretation node whose mapped subgraph is induced on that node set.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph and current image-node associations.
-        - Output AG state: Returns a new AbstractGraph with the same preimage_graph and one image node
-          per association, representing the degree-filtered set of vertices (possibly empty).
+        - Input AG state: Reads abstract_graph.base_graph and current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph with the same base graph and one interpretation node
+          per mapped subgraph, representing the degree-filtered set of vertices (possibly empty).
         - Determinism: Deterministic given input graph and degree bounds.
 
     Parameters
@@ -1331,19 +1331,19 @@ def degree(
 
     Algorithm
         - Normalize value into (min_degree, max_degree).
-        - For each subgraph in get_image_nodes_associations():
+        - For each mapped subgraph:
             * Call degree_decomposition_function(subgraph, min_degree, max_degree).
-            * For the returned node set, create one image node via
-              create_image_node_with_subgraph_from_nodes(component, meta=...).
+            * For the returned node set, create one interpretation node via
+              create_interpretation_node_with_subgraph_from_nodes(component, meta=...).
 
     Complexity
-        Let S be number of associations, and V_i their vertex counts.
+        Let S be number of mapped subgraphs, and V_i their vertex counts.
         Time: Σ_i O(|V_i| + |E_i|) for degree calculation.
-        Memory: O(total nodes across associations).
+        Memory: O(total nodes across mapped subgraphs).
 
     Side Effects & Metadata
-        - Each created image node stores:
-            * 'association': induced subgraph on nodes satisfying the degree constraint.
+        - Each created interpretation node stores:
+            * `mapped_subgraph`: induced subgraph on nodes satisfying the degree constraint.
             * 'meta': {'source_function': 'degree', 'params': {...}}.
         - Labels/attributes not computed here; call update() afterwards.
 
@@ -1354,10 +1354,10 @@ def degree(
 
     Constraints & Invariants
         - Works for both directed and undirected graphs, but degree is total degree for directed.
-        - Produces exactly one image node per association (possibly empty subgraph).
+        - Produces exactly one interpretation node per mapped subgraph (possibly empty subgraph).
 
     Examples
-        # Extract all degree-1 vertices across associations
+        # Extract all degree-1 vertices across mapped subgraphs
         workflow = forward_compose(degree(value=1))
         Q2 = workflow(Q).update()
 
@@ -1373,7 +1373,7 @@ def degree(
         - Chemistry: hydrogens (degree=1) vs. branching carbons.
 
     Failure Modes & Diagnostics
-        - Produces empty associations when no nodes match; can accumulate many empty image nodes.
+        - Produces empty mapped subgraphs when no nodes match; can accumulate many empty interpretation nodes.
         - Explosion risk is low, but many singleton sets can be produced if graph is large.
     """
     value = value_to_2tuple(value)
@@ -1429,48 +1429,48 @@ def split(
     n_parts=2,
     seed=0
     ) -> 'AbstractGraph':
-    """Emit image nodes by recursively bipartitioning each subgraph via Kernighan–Lin.
+    """Emit interpretation nodes by recursively bipartitioning each mapped subgraph via Kernighan–Lin.
     Summary
-        For every associated subgraph, repeatedly split the largest current part until
+        For every mapped subgraph, repeatedly split the largest current part until
         `n_parts` are reached (or no further split is possible). Each part is emitted
-        as an image node.
+        as an interpretation node.
 
     Semantics
-        - Input AG state: Reads `abstract_graph.preimage_graph` and current image-node associations.
-        - Output AG state: Returns a new `AbstractGraph` with the same preimage; its image graph contains
-          one or two nodes per input association, each associated to the induced subgraph on the part.
+        - Input AG state: Reads `abstract_graph.base_graph` and current interpretation-node mapped subgraphs.
+        - Output AG state: Returns a new `AbstractGraph` with the same base graph; its interpretation graph contains
+          one or more nodes per input mapped subgraph, each mapped to the induced subgraph on the part.
           Determinism: Deterministic when `seed` is fixed; stochastic when `seed=None`.
 
     Parameters
         n_parts : int, default 2
-            Desired number of output parts per input association. The operator
+            Desired number of output parts per input mapped subgraph. The operator
             recursively splits the largest current part to approach this target.
         seed : int | None, default 0
             Random seed passed to Kernighan-Lin bisection. Keep fixed for
             deterministic partitions; set to None for stochastic partitions.
 
     Algorithm
-        - Initialize `out_abstract_graph` with the same preimage graph.
-        - For each associated subgraph:
+        - Initialize `out_abstract_graph` with the same base graph.
+        - For each mapped subgraph:
             * Start with one part containing all its nodes.
             * While number of parts is below `n_parts`:
                 - Select the largest current part.
                 - Attempt a KL bisection on that part's induced subgraph.
                 - If split succeeds into two non-empty proper parts, replace the
                   selected part with the two new parts; otherwise stop.
-            * Emit one image node per resulting part.
+            * Emit one interpretation node per resulting part.
 
     Complexity
-        Let S be the number of associations, with sizes (V_i, E_i).
+        Let S be the number of mapped subgraphs, with sizes (V_i, E_i).
         - KL bisection per subgraph is roughly O(|E_i|) to O(|V_i|^2) depending on implementation and graph density.
-        - Overall time: Σ_i KL_cost(subgraph_i) + image-node creation overhead.
+        - Overall time: Σ_i KL_cost(subgraph_i) + interpretation-node creation overhead.
         - Memory: proportional to emitted induced subgraphs.
 
     Side Effects & Metadata
-        - For split parts, each created image node includes:
-            * 'association' : induced subgraph on the part’s node set.
+        - For split parts, each created interpretation node includes:
+            * `mapped_subgraph` : induced subgraph on the part’s node set.
             * 'meta' : {'source_function': 'split', 'params': {...}} via build_meta_from_function_context().
-        - Degenerate/non-splittable cases still emit one image node with metadata.
+        - Degenerate/non-splittable cases still emit one interpretation node with metadata.
 
     Interactions
         - Common precursor to `filter_by_number_of_nodes/edges` to prune tiny or huge parts.
@@ -1479,10 +1479,10 @@ def split(
 
     Constraints & Invariants
         - Assumes undirected graphs for KL; on disconnected subgraphs or KL failures, falls back to a single part.
-        - Does not modify the preimage graph.
+        - Does not modify the base graph.
 
     Examples
-        # One-shot bisection of current associations
+        # One-shot bisection of current mapped subgraphs
         workflow = forward_compose(split())
         Q2 = workflow(Q).update()
 
@@ -1616,14 +1616,14 @@ def neighborhood(
     abstract_graph: 'AbstractGraph',
     radius=(0,1)
 ) -> 'AbstractGraph':
-    """Emit image nodes for BFS neighborhoods of each node in current associations, over a radius range.
+    """Emit interpretation nodes for BFS neighborhoods of each node in current mapped subgraphs.
     Summary
         For each node in each input subgraph, generate BFS balls of all radii r in [min_radius, max_radius].
-        Each resulting ball is represented as a new image node in the output AbstractGraph.
+        Each resulting ball is represented as a new interpretation node in the output AbstractGraph.
 
     Semantics
-        - Input AG state: Reads abstract_graph.preimage_graph and current image-node associations.
-        - Output AG state: New AbstractGraph whose image graph contains one node per BFS neighborhood.
+        - Input AG state: Reads abstract_graph.base_graph and current interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph whose interpretation graph contains one node per BFS neighborhood.
           Provenance metadata records operator and parameters.
         - Determinism: Fully deterministic given graph and radius.
 
@@ -1633,20 +1633,20 @@ def neighborhood(
 
     Algorithm
         - Normalize radius bounds using value_to_2tuple().
-        - For each subgraph in get_image_nodes_associations():
+        - For each mapped subgraph:
             * For r from min_radius to max_radius:
                 - For each node in the subgraph:
                     - Call get_reachable_nodes_bfs(subgraph, source=node, cutoff=r).
-                    - Create image node with induced subgraph on reachable nodes.
+                    - Create an interpretation node with the induced subgraph on reachable nodes.
 
     Complexity
         Let N = total nodes, E = total edges, R = number of radius values.
         - BFS cost per node is O(E) worst-case; repeated for N × R nodes.
-        - Output size: O(N × R) image nodes per association.
+        - Output size: O(N × R) interpretation nodes per mapped subgraph.
 
     Side Effects & Metadata
-        - Each created image node stores:
-            * 'association': induced subgraph on reachable set.
+        - Each created interpretation node stores:
+            * `mapped_subgraph`: induced subgraph on reachable set.
             * 'meta': {'source_function': 'neighborhood', 'params': {'radius': (rmin,rmax)}}.
         - Labels/attributes not computed; call update() downstream.
 
@@ -1657,7 +1657,7 @@ def neighborhood(
 
     Constraints & Invariants
         - Works with any connected or disconnected graph.
-        - Emits one image node per (node, r) pair.
+        - Emits one interpretation node per (node, r) pair.
         - Empty results only possible for r=0 (singleton neighborhoods).
 
     Examples
@@ -1767,14 +1767,14 @@ def cycle(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit one image node per cycle in each associated subgraph.
+    """Emit one interpretation node per cycle in each mapped subgraph.
     Summary
-        For each input subgraph, compute its simple cycle basis and create one image node per cycle,
-        with the association set to the induced subgraph on that cycle’s nodes.
+        For each input mapped subgraph, compute its simple cycle basis and create one interpretation node per cycle,
+        with the mapped subgraph set to the induced subgraph on that cycle’s nodes.
 
     Semantics
-        - Input AG state: Uses abstract_graph.preimage_graph and image-node associations.
-        - Output AG state: New AbstractGraph where each image node corresponds to a simple cycle.
+        - Input AG state: Uses abstract_graph.base_graph and interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph where each interpretation node corresponds to a simple cycle.
         - Determinism: Deterministic given the input graph; cycle_basis order is consistent per run.
 
     Parameters
@@ -1782,16 +1782,16 @@ def cycle(
             Placeholder for operator interface; ignored.
 
     Algorithm
-        - For each subgraph in get_image_nodes_associations():
+        - For each mapped subgraph:
             * Call cycle_decomposition_function(subgraph).
-            * For each cycle (node set), create an image node via create_image_node_with_subgraph_from_nodes().
+            * For each cycle (node set), create an interpretation node via create_interpretation_node_with_subgraph_from_nodes().
 
     Complexity
         - cycle_basis: O(|V| + |E|) per subgraph.
-        - Total cost: sum over all associations.
+        - Total cost: sum over all mapped subgraphs.
 
     Metadata
-        - Each emitted image node stores 'association' (the cycle-induced subgraph) and 'meta'
+        - Each emitted interpretation node stores `mapped_subgraph` (the cycle-induced subgraph) and `meta`
           with source_function='cycle'.
 
     Interactions
@@ -1830,14 +1830,14 @@ def tree(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit one image node per acyclic connected component in each associated subgraph.
+    """Emit one interpretation node per acyclic connected component in each mapped subgraph.
     Summary
-        For each subgraph, remove all cycle edges and compute the remaining connected components.
-        For each nontrivial acyclic component, create an image node with association to that node set.
+        For each mapped subgraph, remove all cycle edges and compute the remaining connected components.
+        For each nontrivial acyclic component, create an interpretation node mapped to that node set.
 
     Semantics
-        - Input AG state: Uses abstract_graph.preimage_graph and image-node associations.
-        - Output AG state: New AbstractGraph where each image node is an acyclic component (tree).
+        - Input AG state: Uses abstract_graph.base_graph and interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph where each interpretation node is an acyclic component (tree).
         - Determinism: Deterministic given input graph.
 
     Parameters
@@ -1845,16 +1845,16 @@ def tree(
             Placeholder argument; ignored.
 
     Algorithm
-        - For each subgraph in get_image_nodes_associations():
+        - For each mapped subgraph:
             * Call non_cycle_decomposition_function(subgraph).
-            * For each returned component (node set), create a new image node.
+            * For each returned component (node set), create a new interpretation node.
 
     Complexity
         - Cycle detection + complement graph construction: O(|V| + |E|).
         - Connected components: O(|V| + |E|).
 
     Metadata
-        - Each image node stores 'association' (acyclic subgraph) and 'meta' with source_function='tree'.
+        - Each interpretation node stores `mapped_subgraph` (acyclic subgraph) and `meta` with source_function='tree'.
 
     Interactions
         - Complements `cycle()` to partition graph into cyclic and acyclic parts.
@@ -1935,15 +1935,15 @@ def path(
     abstract_graph: 'AbstractGraph',
     number_of_edges=(1,3)
     ) -> 'AbstractGraph':
-    """Emit one image node per path within given edge-length bounds.
+    """Emit one interpretation node per path within given edge-length bounds.
     Summary
         For each subgraph, enumerate simple paths whose length in edges lies between
         `min_number_of_edges` and `max_number_of_edges`. Each distinct path’s nodes
-        form a new image node in the output AbstractGraph.
+        form a new interpretation node in the output AbstractGraph.
 
     Semantics
-        - Input AG state: Reads preimage_graph and current image-node associations.
-        - Output AG state: New AbstractGraph with additional image nodes, one per qualifying path.
+        - Input AG state: Reads base_graph and current interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph with additional interpretation nodes, one per qualifying path.
         - Determinism: Deterministic given input graph and parameters.
 
     Parameters
@@ -1952,9 +1952,9 @@ def path(
 
     Algorithm
         - Normalize number_of_edges with value_to_2tuple().
-        - For each subgraph association:
+        - For each mapped subgraph:
             * Call path_decomposition_function(subgraph, min, max).
-            * For each resulting node set, create a new image node with association=subgraph induced by that set.
+            * For each resulting node set, create a new interpretation node with the induced mapped subgraph.
 
     Complexity
         Path enumeration can grow exponentially with graph size.
@@ -1962,7 +1962,7 @@ def path(
         - Filtering bounds keeps only paths within min/max.
 
     Metadata
-        Each image node stores 'association' (induced path subgraph) and 'meta'
+        Each interpretation node stores `mapped_subgraph` (induced path subgraph) and `meta`
         with source_function='path' and parameters.
 
     Interactions
@@ -2045,15 +2045,15 @@ def graphlet(
     radius=1,
     number_of_nodes=(1,3)
     ) -> 'AbstractGraph':
-    """Emit image nodes for connected graphlets within ego neighborhoods.
+    """Emit interpretation nodes for connected graphlets within ego neighborhoods.
     Summary
         For each input subgraph, enumerate all connected induced subgraphs
         (“graphlets”) of size between `min_number_of_nodes` and `max_number_of_nodes`
-        inside ego neighborhoods of radius `r`. Each graphlet becomes a new image node.
+        inside ego neighborhoods of radius `r`. Each graphlet becomes a new interpretation node.
 
     Semantics
-        - Input AG state: Reads preimage_graph and image-node associations.
-        - Output AG state: New AbstractGraph with one image node per connected graphlet.
+        - Input AG state: Reads base_graph and interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph with one interpretation node per connected graphlet.
         - Determinism: Deterministic enumeration, though order of graphlets is not guaranteed.
 
     Parameters
@@ -2064,16 +2064,16 @@ def graphlet(
 
     Algorithm
         - Normalize number_of_nodes with value_to_2tuple().
-        - For each subgraph association:
+        - For each mapped subgraph:
             * Call graphlet_decomposition_function(subgraph, radius, min, max).
-            * For each node tuple, create an image node representing the induced subgraph.
+            * For each node tuple, create an interpretation node representing the induced subgraph.
 
     Complexity
         - Exponential in subgraph size due to combinations.
         - Mitigated by limiting radius and max_number_of_nodes.
 
     Metadata
-        - Each image node stores 'association' (graphlet subgraph) and 'meta'
+        - Each interpretation node stores `mapped_subgraph` (graphlet subgraph) and `meta`
           with source_function='graphlet' and params.
 
     Interactions
@@ -2149,14 +2149,14 @@ def clique(
     abstract_graph: 'AbstractGraph',
     number_of_nodes=(1,3)
     ) -> 'AbstractGraph':
-    """Emit one image node per clique of bounded size.
+    """Emit one interpretation node per clique of bounded size.
     Summary
         For each subgraph, enumerate all cliques (fully connected subgraphs) whose
-        number of nodes lies between given bounds. Each clique becomes a new image node.
+        number of nodes lies between given bounds. Each clique becomes a new interpretation node.
 
     Semantics
-        - Input AG state: Uses abstract_graph.preimage_graph and image-node associations.
-        - Output AG state: New AbstractGraph with image nodes corresponding to cliques.
+        - Input AG state: Uses abstract_graph.base_graph and interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph with interpretation nodes corresponding to cliques.
         - Determinism: Deterministic given NetworkX’s clique enumeration.
 
     Parameters
@@ -2165,9 +2165,9 @@ def clique(
 
     Algorithm
         - Normalize number_of_nodes with value_to_2tuple().
-        - For each subgraph association:
+        - For each mapped subgraph:
             * Call clique_decomposition_function(subgraph, min, max).
-            * For each clique, create an image node with association=subgraph induced by that clique.
+            * For each clique, create an interpretation node with the induced mapped subgraph.
 
     Complexity
         Clique enumeration can be exponential in graph density and size.
@@ -2175,7 +2175,7 @@ def clique(
         - Bounded by min/max size to limit blow-up.
 
     Metadata
-        - Each image node stores 'association' (clique subgraph) and 'meta'
+        - Each interpretation node stores `mapped_subgraph` (clique subgraph) and `meta`
           with source_function='clique' and params.
 
     Interactions
@@ -2227,33 +2227,33 @@ def complement(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit image nodes representing the complement of each subgraph.
+    """Emit interpretation nodes representing the complement of each mapped subgraph.
     Summary
-        For every subgraph associated with an image node, create a new image node
-        whose association consists of all preimage nodes *not* in the original subgraph.
+        For every mapped subgraph, create a new interpretation node
+        whose mapped subgraph consists of all base-graph nodes *not* in the original subgraph.
 
     Semantics
-        - Input AG state: Reads the preimage_graph node set and current image-node associations.
-        - Output AG state: New AbstractGraph where each image node corresponds to the complement
-          node set of its input association.
-        - Determinism: Deterministic given the input graph and associations.
+        - Input AG state: Reads the base-graph node set and current interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph where each interpretation node corresponds to the complement
+          node set of its input mapped subgraph.
+        - Determinism: Deterministic given the input graph and mapped subgraphs.
 
     Parameters
         param : ignored
             Present only for consistency with curried operator signatures.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each mapped subgraph:
             * Collect its node set.
-            * Compute set difference with all nodes in preimage_graph.
-            * Create a new image node with that complementary node set.
+            * Compute set difference with all nodes in base_graph.
+            * Create a new interpretation node with that complementary node set.
 
     Complexity
-        - Time: O(N) per subgraph, where N is number of nodes in preimage_graph.
+        - Time: O(N) per subgraph, where N is number of nodes in base_graph.
         - Memory: proportional to output size (number of complement sets).
 
     Metadata
-        - Each output image node stores 'association' (induced subgraph of complement nodes)
+        - Each output interpretation node stores `mapped_subgraph` (induced subgraph of complement nodes)
           and 'meta' with source_function='complement'.
 
     Interactions
@@ -2276,7 +2276,7 @@ def complement(
         - Chemistry: atoms outside a functional group.
 
     Failure Modes & Diagnostics
-        - Empty complements arise if subgraph = entire preimage_graph.
+        - Empty complements arise if subgraph = entire base_graph.
         - Full complements (all nodes) arise if subgraph = ∅ (rare).
         - Complement size may dwarf the original subgraph; consider filtering.
     """
@@ -2303,9 +2303,9 @@ def edge_complement(
     abstract_graph: 'AbstractGraph',
     param=None
     ) -> 'AbstractGraph':
-    """Emit image nodes from the edge complement of each associated subgraph.
+    """Emit interpretation nodes from the edge complement of each mapped subgraph.
 
-    For each associated subgraph, this operator takes all preimage edges that are
+    For each mapped subgraph, this operator takes all base-graph edges that are
     not present in the subgraph and emits the edge-induced subgraph from those edges.
 
     Args:
@@ -2313,8 +2313,8 @@ def edge_complement(
         param: Ignored; kept for signature consistency with other curried operators.
 
     Returns:
-        AbstractGraph: A new AbstractGraph with one image node per input association,
-        where each association is the edge-induced complement subgraph.
+        AbstractGraph: A new AbstractGraph with one interpretation node per input mapped subgraph,
+        where each mapped subgraph is the edge-induced complement subgraph.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -2372,15 +2372,15 @@ def betweenness_centrality(
     number_of_nodes=1,
     use_perifery=False
     ) -> 'AbstractGraph':
-    """Emit image nodes for nodes ranked by betweenness centrality.
+    """Emit interpretation nodes for nodes ranked by betweenness centrality.
     Summary
         For each subgraph, compute betweenness centrality scores and select either
         the top-k most central nodes or the bottom-k least central nodes. Each selected
-        set is emitted as a new image node.
+        set is emitted as a new interpretation node.
 
     Semantics
-        - Input AG state: Reads preimage_graph and image-node associations.
-        - Output AG state: New AbstractGraph with image nodes corresponding to
+        - Input AG state: Reads base_graph and interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph with interpretation nodes corresponding to
           sets of central or peripheral nodes.
         - Determinism: Deterministic given the input graph and parameters.
 
@@ -2394,14 +2394,14 @@ def betweenness_centrality(
         - Compute betweenness centrality on each subgraph with NetworkX.
         - Sort nodes by centrality score (descending unless use_perifery=True).
         - Take the first `number_of_nodes`.
-        - Create a new image node for that set.
+        - Create a new interpretation node for that set.
 
     Complexity
         Betweenness centrality is O(|V||E|) on unweighted graphs.
         - Cost grows quickly with graph size; suitable mainly for small subgraphs.
 
     Metadata
-        - Each image node stores 'association' (selected node set) and 'meta'
+        - Each interpretation node stores `mapped_subgraph` (selected node set) and `meta`
           with source_function='betweenness_centrality' and params.
 
     Interactions
@@ -2480,7 +2480,7 @@ def betweenness_centrality_split(
         abstract_graph: Input AbstractGraph.
         number_of_nodes: Chunk size for grouped ranked nodes.
     Returns:
-        AbstractGraph: A new AbstractGraph where each image node is the induced
+        AbstractGraph: A new AbstractGraph where each interpretation node is the induced
         subgraph of one chunk from the betweenness-ranked node list.
     """
     out_abstract_graph = AbstractGraph(
@@ -2575,7 +2575,7 @@ def betweenness_centrality_hop_split(
         n_hops: Hop-window width/stride used during BFS windowing.
 
     Returns:
-        AbstractGraph: A new AbstractGraph with one image node per emitted
+        AbstractGraph: A new AbstractGraph with one interpretation node per emitted
         connected component from the hop-window decomposition.
     """
     out_abstract_graph = AbstractGraph(
@@ -2781,7 +2781,7 @@ def _inject_overlap_nodes(
     min_overlap_nodes: int = 1,
 ):
     """
-    Ensure the two parts share at least ``min_overlap_nodes`` preimage nodes.
+    Ensure the two parts share at least ``min_overlap_nodes`` base-graph nodes.
 
     Args:
         subgraph: Parent subgraph.
@@ -3148,7 +3148,7 @@ def low_cut_partition(
     seed: Optional[int] = None,
 ) -> 'AbstractGraph':
     """
-    Partition associations into connected pieces with low cut-interface complexity.
+    Partition mapped subgraphs into connected pieces with low cut-interface complexity.
 
     Args:
         abstract_graph: Input AbstractGraph.
@@ -3171,7 +3171,7 @@ def low_cut_partition(
         seed: Optional RNG seed.
 
     Returns:
-        AbstractGraph: New AbstractGraph with one image node per partition part.
+        AbstractGraph: New AbstractGraph with one interpretation node per partition part.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -3214,14 +3214,14 @@ def merge(
     abstract_graph: 'AbstractGraph',
     use_edges=False
     ) -> 'AbstractGraph':
-    """Merge all subgraphs into a single image node.
+    """Merge all mapped subgraphs into a single interpretation node.
     Summary
-        Combine the contents of all subgraph associations into one new image node.
+        Combine the contents of all mapped subgraphs into one new interpretation node.
         By default, collects all nodes; if `use_edges=True`, collects all edges instead.
 
     Semantics
-        - Input AG state: Reads associations from all current image nodes.
-        - Output AG state: New AbstractGraph with a single image node containing
+        - Input AG state: Reads mapped subgraphs from all current interpretation nodes.
+        - Output AG state: New AbstractGraph with a single interpretation node containing
           either the union of all nodes or the union of all edges.
         - Determinism: Deterministic union, order of accumulation does not matter.
 
@@ -3232,17 +3232,17 @@ def merge(
 
     Algorithm
         - Initialize an empty component.
-        - For each subgraph association:
+        - For each mapped subgraph:
             * Collect nodes (default) or edges (`use_edges=True`).
             * Extend the component list.
-        - Create a single image node with this combined component.
+        - Create a single interpretation node with this combined component.
 
     Complexity
         - Time: O(sum of sizes of all subgraphs).  
         - Memory: proportional to merged node or edge set.
 
     Metadata
-        - Each output image node stores 'association' (merged subgraph) and 'meta'
+        - Each output interpretation node stores `mapped_subgraph` (merged subgraph) and `meta`
           with source_function='merge' and params.
 
     Interactions
@@ -3267,7 +3267,7 @@ def merge(
         - Chemistry: union of functional groups into a single motif.
 
     Failure Modes & Diagnostics
-        - If associations are empty, creates a single empty image node.
+        - If mapped subgraphs are empty, creates a single empty interpretation node.
         - `use_edges=True` produces edges but may result in disconnected node sets.
     """
     out_abstract_graph = AbstractGraph(
@@ -3301,18 +3301,18 @@ def merge(
 def deduplicate(
     abstract_graph: 'AbstractGraph',
 ) -> 'AbstractGraph':
-    """Drop duplicate image nodes based on their underlying preimage node sets.
+    """Drop duplicate interpretation nodes based on their underlying base-graph node sets.
     Summary
-        Keep the first occurrence of each association; duplicates are detected
-        via a deterministic hash of the sorted preimage node IDs.
+        Keep the first occurrence of each mapped subgraph; duplicates are detected
+        via a deterministic hash of the sorted base-graph node IDs.
 
     Semantics
-        - Input: reads image_graph nodes/edges and their 'association'.
-        - Output: new AbstractGraph with deduped image nodes; preserves
-          preimage_graph and reattaches image-graph edges between retained nodes.
+        - Input: reads interpretation_graph nodes/edges and their mapped subgraphs.
+        - Output: new AbstractGraph with deduped interpretation nodes; preserves
+          base_graph and reattaches interpretation-graph edges between retained nodes.
 
     Algorithm
-        - For each image node, hash the sorted node IDs of its associated subgraph.
+        - For each interpretation node, hash the sorted node IDs of its mapped subgraph.
         - If the hash has not been seen, keep the node; otherwise skip.
         - Carry over meta/label/attribute for kept nodes; remap edges accordingly.
     """
@@ -3363,13 +3363,13 @@ def unique(
 def remove_redundant_associations(
     abstract_graph: 'AbstractGraph',
 ) -> 'AbstractGraph':
-    """Remove image nodes whose associations are strictly covered by larger ones.
+    """Remove interpretation nodes whose mapped subgraphs are strictly covered by larger ones.
 
     Args:
         abstract_graph: Input AbstractGraph.
 
     Returns:
-        AbstractGraph: A new AbstractGraph with covered smaller associations removed.
+        AbstractGraph: A new AbstractGraph with covered smaller mapped subgraphs removed.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -3431,6 +3431,14 @@ def remove_redundant_associations(
 
     return out_abstract_graph
 
+
+@curry
+def remove_redundant_mapped_subgraphs(
+    abstract_graph: 'AbstractGraph',
+) -> 'AbstractGraph':
+    """Canonical alias for remove_redundant_associations."""
+    return remove_redundant_associations(abstract_graph=abstract_graph)
+
 #--------------------------------------------------------------------------------    
 @curry
 def intersection(
@@ -3438,16 +3446,16 @@ def intersection(
     node_size=None,
     must_be_connected: bool = True
 ) -> 'AbstractGraph':
-    """Emit image nodes for intersections of every pair of associated subgraphs.
+    """Emit interpretation nodes for intersections of every pair of mapped subgraphs.
     Summary
-        For each unordered pair of image nodes in the input AbstractGraph, compute the
-        intersection of their associated subgraphs' node sets. If the intersection size
-        is within the inclusive range `node_size`, create a new image node whose
-        association is the induced subgraph on those intersecting nodes.
+        For each unordered pair of interpretation nodes in the input AbstractGraph, compute the
+        intersection of their mapped subgraphs' node sets. If the intersection size
+        is within the inclusive range `node_size`, create a new interpretation node whose
+        mapped subgraph is the induced subgraph on those intersecting nodes.
 
     Semantics
-        - Input AG state: Reads associations from current image nodes and the preimage_graph.
-        - Output AG state: New AbstractGraph with one image node per qualifying intersection.
+        - Input AG state: Reads mapped subgraphs from current interpretation nodes and the base_graph.
+        - Output AG state: New AbstractGraph with one interpretation node per qualifying intersection.
         - Determinism: Deterministic given the input graph and `node_size`.
 
     Parameters
@@ -3457,19 +3465,19 @@ def intersection(
             is given, the intersection size must satisfy min ≤ |I| ≤ max.
         must_be_connected : bool, default True
             If True, accept the intersection only when its induced subgraph on the
-            preimage graph forms exactly one connected component.
+            base graph forms exactly one connected component.
 
     Algorithm
-        - Iterate over all unordered pairs of image nodes (u, v), u < v.
+        - Iterate over all unordered pairs of interpretation nodes (u, v), u < v.
         - Compute intersection I = nodes(assoc[u]) ∩ nodes(assoc[v]).
-        - If min(node_size) ≤ |I| ≤ max(node_size), create an image node with association = induced subgraph on I.
+        - If min(node_size) ≤ |I| ≤ max(node_size), create an interpretation node with the induced mapped subgraph on I.
 
     Complexity
-        - Time: O(M^2 · d) where M = number of image nodes, d = average subgraph size.
+        - Time: O(M^2 · d) where M = number of interpretation nodes, d = average subgraph size.
         - Memory: proportional to number and size of emitted intersections.
 
     Interactions
-        - Complements `intersection_edges`, but creates new image nodes instead of edges.
+        - Complements `intersection_edges`, but creates new interpretation nodes instead of edges.
         - Often followed by `filter_by_number_of_nodes` or connectivity filters.
 
     Examples
@@ -3638,17 +3646,17 @@ def combination(
     number_of_elements=(2,2),
     distance=(0,1)
     ) -> 'AbstractGraph':
-    """Emit image nodes formed by combining multiple subgraphs subject to distance constraints.
+    """Emit interpretation nodes formed by combining multiple mapped subgraphs subject to distance constraints.
     Summary
-        For each feasible combination of subgraphs, create a new image node whose
-        association is the union of their node sets. A combination is feasible if:
+        For each feasible combination of mapped subgraphs, create a new interpretation node whose
+        mapped subgraph is the union of their node sets. A combination is feasible if:
         - The number of subgraphs lies within `number_of_elements`.
-        - All pairwise distances between them (measured in preimage_graph) fall
+        - All pairwise distances between them (measured in base_graph) fall
           within the specified `distance` range.
 
     Semantics
-        - Input AG state: Consumes the current set of image-node associations.
-        - Output AG state: New AbstractGraph with image nodes representing unions
+        - Input AG state: Consumes the current set of interpretation-node mapped subgraphs.
+        - Output AG state: New AbstractGraph with interpretation nodes representing unions
           of feasible subgraph combinations.
         - Determinism: Deterministic given input graph and parameters.
 
@@ -3664,14 +3672,14 @@ def combination(
         - Enumerate all subgraph combinations of size within bounds.
         - Keep only those with feasible distances.
         - Form union of node sets for each valid combination.
-        - Emit one image node per union.
+        - Emit one interpretation node per union.
 
     Complexity
         - Distance matrix: O(k² * |V| + |E|), where k = number of subgraphs.
         - Combinations: exponential in k, practical only for small subgraph sets.
 
     Metadata
-        - Each output image node stores 'association' (unioned node set) and 'meta'
+        - Each output interpretation node stores `mapped_subgraph` (unioned node set) and `meta`
           with source_function='combination' and params.
 
     Interactions
@@ -3802,39 +3810,39 @@ def intersection_edges(
 ) -> 'AbstractGraph':
     """Add edges between interpretation nodes whose mapped subgraphs overlap or are adjacent.
     Summary
-        For each pair of image nodes, add an edge in the image graph if:
+        For each pair of interpretation nodes, add an edge in the interpretation graph if:
         - Their associated subgraphs share at least `size_threshold` nodes, OR
         - (optional) any node in one subgraph is directly connected by an edge
-          in the preimage graph to a node in the other subgraph
+          in the base graph to a node in the other subgraph
           (`accept_connection_by_edge=True`).
 
     Semantics
-        - Input AG state: Reads image-node associations and preimage graph.
+        - Input AG state: Reads interpretation-node mapped subgraphs and base graph.
         - Output AG state: Returns a new AbstractGraph with extra edges
-          added between image nodes satisfying the criteria.
+          added between interpretation nodes satisfying the criteria.
         - Determinism: Deterministic given the input graph and parameters.
 
     Parameters
         size_threshold : int, default 1
             Minimum number of shared nodes between subgraphs required to add an edge.
         accept_connection_by_edge : bool, default False
-            If True, also connect image nodes if any pair of their preimage nodes
-            share an edge in the preimage graph.
+            If True, also connect interpretation nodes if any pair of their base-graph nodes
+            share an edge in the base graph.
 
     Algorithm
-        - Iterate over all ordered pairs of image nodes (u,v).
-        - Extract node sets from each subgraph association.
+        - Iterate over all ordered pairs of interpretation nodes (u,v).
+        - Extract node sets from each mapped subgraph.
         - If |intersection| ≥ size_threshold, mark as connected.
-        - If `accept_connection_by_edge=True`, also scan preimage edges
+        - If `accept_connection_by_edge=True`, also scan base-graph edges
           between the node sets.
         - Add edge (u,v) if condition holds.
 
     Complexity
-        - Time: O(M² * d) where M = number of image nodes and d is average subgraph size.
-        - Memory: O(1) beyond input graphs and new image edges.
+        - Time: O(M² * d) where M = number of interpretation nodes and d is average subgraph size.
+        - Memory: O(1) beyond input graphs and new interpretation-graph edges.
 
     Metadata
-        - Output image edges are unlabeled unless edge_function later annotates them.
+        - Output interpretation-graph edges are unlabeled unless edge_function later annotates them.
 
     Interactions
         - Complements decomposition operators: can create higher-level
@@ -3861,7 +3869,7 @@ def intersection_edges(
         - Chemistry: functional groups sharing atoms or bonds.
 
     Failure Modes & Diagnostics
-        - Large image graphs (many nodes) may make pairwise checks costly.
+        - Large interpretation graphs (many nodes) may make pairwise checks costly.
         - If no overlaps and `accept_connection_by_edge=False`, output graph
           may be entirely disconnected.
     """
@@ -3928,9 +3936,9 @@ def filter_by_number_of_connected_components(
         falls within the specified interval.
 
     Semantics
-        - Input AG state: Reads node associations of current image nodes.
+        - Input AG state: Reads mapped subgraphs of current interpretation nodes.
         - Output AG state: Returns a new AbstractGraph containing only
-          image nodes whose subgraphs satisfy the component-count filter.
+          interpretation nodes whose mapped subgraphs satisfy the component-count filter.
         - Determinism: Deterministic given input and parameter range.
 
     Parameters
@@ -3939,7 +3947,7 @@ def filter_by_number_of_connected_components(
             allowed. E.g. (1,1) keeps only connected subgraphs.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each interpretation-node mapped subgraph:
             * Compute connected components with `nx.connected_components`.
             * Count how many components exist.
             * Keep the subgraph if count ∈ [min,max].
@@ -3950,7 +3958,7 @@ def filter_by_number_of_connected_components(
         - Memory: proportional to node count of the kept subgraphs.
 
     Metadata
-        - Each surviving image node keeps original meta with added provenance
+        - Each surviving interpretation node keeps original meta with added provenance
           (source_function='filter_by_number_of_connected_components').
 
     Interactions
@@ -4008,9 +4016,9 @@ def filter_by_number_of_nodes(
         the specified inclusive range.
 
     Semantics
-        - Input AG state: Reads node associations of current image nodes.
+        - Input AG state: Reads mapped subgraphs of current interpretation nodes.
         - Output AG state: Returns a new AbstractGraph containing only
-          image nodes whose subgraphs satisfy the node-count constraint.
+          interpretation nodes whose mapped subgraphs satisfy the node-count constraint.
         - Determinism: Deterministic given input and parameter range.
 
     Parameters
@@ -4019,7 +4027,7 @@ def filter_by_number_of_nodes(
             in each subgraph.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each interpretation-node mapped subgraph:
             * Compute its node count.
             * Keep the subgraph if count ∈ [min,max].
         - Discard otherwise.
@@ -4029,7 +4037,7 @@ def filter_by_number_of_nodes(
         - Memory: proportional to number of retained subgraphs.
 
     Metadata
-        - Each surviving image node keeps its original meta,
+        - Each surviving interpretation node keeps its original meta,
           with provenance marking the filter application.
 
     Interactions
@@ -4088,9 +4096,9 @@ def filter_by_number_of_edges(
         the specified inclusive range.
 
     Semantics
-        - Input AG state: Reads edge sets of current image-node subgraphs.
+        - Input AG state: Reads edge sets of current interpretation-node mapped subgraphs.
         - Output AG state: Returns a new AbstractGraph containing only
-          image nodes whose subgraphs satisfy the edge-count constraint.
+          interpretation nodes whose mapped subgraphs satisfy the edge-count constraint.
         - Determinism: Deterministic given input and parameter range.
 
     Parameters
@@ -4099,7 +4107,7 @@ def filter_by_number_of_edges(
             in each subgraph.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each interpretation-node mapped subgraph:
             * Compute its edge count.
             * Keep the subgraph if count ∈ [min,max].
         - Discard otherwise.
@@ -4109,7 +4117,7 @@ def filter_by_number_of_edges(
         - Memory: proportional to number of retained subgraphs.
 
     Metadata
-        - Each surviving image node keeps its original meta,
+        - Each surviving interpretation node keeps its original meta,
           with provenance marking the filter application.
 
     Interactions
@@ -4163,32 +4171,32 @@ def filter_by_sampling(
     ) -> 'AbstractGraph':
     """Randomly subsample interpretation nodes.
     Summary
-        Keep a random subset of image nodes and their edges. Supports absolute
+        Keep a random subset of interpretation nodes and their edges. Supports absolute
         counts (int) or fractions (float in (0,1)); sampling is without replacement.
 
     Semantics
-        - Input AG state: reads current image nodes/edges and associations.
-        - Output AG state: new AbstractGraph with only sampled image nodes; preserves
-          preimage_graph and remaps image-graph edges between retained nodes.
-        - Special case: if there is a single image node covering the full preimage graph,
+        - Input AG state: reads current interpretation nodes/edges and mapped subgraphs.
+        - Output AG state: new AbstractGraph with only sampled interpretation nodes; preserves
+          base_graph and remaps interpretation-graph edges between retained nodes.
+        - Special case: if there is a single interpretation node covering the full base graph,
           delegate to random_part(n_samples=...) to bootstrap subgraphs.
         - Determinism: deterministic if `seed` is provided and the special case does not trigger.
 
     Parameters
         n_samples : int | float, default 1
-            If int ≥ 1: number of image nodes to sample (capped at available count).
-            If 0 < float < 1: fraction of image nodes to sample (rounded with min 1).
+            If int ≥ 1: number of interpretation nodes to sample (capped at available count).
+            If 0 < float < 1: fraction of interpretation nodes to sample (rounded with min 1).
         seed : int | None, default None
             Seed for the RNG; None leaves it non-deterministic.
 
     Examples
-        # Keep 10 random image nodes
+        # Keep 10 random interpretation nodes
         filter_by_sampling(n_samples=10)
-        # Keep ~20% of image nodes, deterministic
+        # Keep ~20% of interpretation nodes, deterministic
         filter_by_sampling(n_samples=0.2, seed=42)
 
     Failure Modes & Diagnostics
-        - If n_samples ≤ 0, returns an empty image graph.
+        - If n_samples ≤ 0, returns an empty interpretation graph.
         - Fractions round down; min 1 to avoid empty result unless n_samples ≤ 0.
         - Special-case delegation ignores `seed` (random_part is non-deterministic).
     """
@@ -4263,9 +4271,9 @@ def filter_by_node_label(
         in `cannot_have_any_in`.
 
     Semantics
-        - Input AG state: Reads node attributes of current image-node subgraphs.
+        - Input AG state: Reads node attributes of current interpretation-node mapped subgraphs.
         - Output AG state: Returns a new AbstractGraph containing only
-          image nodes that satisfy both inclusion and exclusion criteria.
+          interpretation nodes that satisfy both inclusion and exclusion criteria.
         - Determinism: Deterministic given input graph and label sets.
 
     Parameters
@@ -4279,7 +4287,7 @@ def filter_by_node_label(
             whose `key` value is in this list.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each interpretation-node mapped subgraph:
             * Check if at least one node’s label ∈ must_have_one_of
               (if constraint provided).
             * Check that no node’s label ∈ cannot_have_any_in
@@ -4374,9 +4382,9 @@ def filter_by_edge_label(
         in `cannot_have_any_in`.
 
     Semantics
-        - Input AG state: Reads edge attributes of current image-node subgraphs.
+        - Input AG state: Reads edge attributes of current interpretation-node mapped subgraphs.
         - Output AG state: Returns a new AbstractGraph containing only
-          image nodes that satisfy both inclusion and exclusion criteria on edges.
+          interpretation nodes that satisfy both inclusion and exclusion criteria on edges.
         - Determinism: Deterministic given input graph and label sets.
 
     Parameters
@@ -4390,7 +4398,7 @@ def filter_by_edge_label(
             whose `key` value is in this list.
 
     Algorithm
-        - For each image-node subgraph:
+        - For each interpretation-node mapped subgraph:
             * Check if at least one edge’s label ∈ must_have_one_of
               (if constraint provided).
             * Check that no edge’s label ∈ cannot_have_any_in
@@ -4476,13 +4484,13 @@ def select_top_by_feature_ranking(
     """Select top-K interpretation nodes based on an external feature-importance ranking.
     Summary
         Given an ordered list of feature IDs (most important first), rank all
-        current image nodes by their label and retain only the top `max_num`.
+        current interpretation nodes by their label and retain only the top `max_num`.
 
     Semantics
-        - Input AG state: Reads image-node labels (computes them on the fly
+        - Input AG state: Reads interpretation-node labels (computes them on the fly
           for nodes missing a 'label' attribute using the AG's label_function).
         - Output AG state: Returns a new AbstractGraph containing only the
-          selected image nodes (their association subgraphs are copied). Operator
+          selected interpretation nodes (their mapped subgraphs are copied). Operator
           settings (label/attribute/edge functions) are preserved.
 
     Parameters
@@ -4490,13 +4498,13 @@ def select_top_by_feature_ranking(
             Label IDs in descending importance order, or a mapping from label
             to importance score. Labels not present receive lowest priority.
         max_num : int, default 1
-            Number of top-ranked image nodes to keep (globally across the image graph).
+            Number of top-ranked interpretation nodes to keep (globally across the interpretation graph).
 
     Notes
         - If labels are provided as an ordering, nodes are ranked by the index
           position (lower index = higher priority).
         - If a mapping is provided, nodes are ranked by score (higher is better).
-        - Image-node labels are treated as integers consistent with hashing-based
+        - Interpretation-node labels are treated as integers consistent with hashing-based
           label functions. Labels not found in the ranking are assigned worst rank.
     """
     # Build scoring function from input ranking.
@@ -4531,7 +4539,7 @@ def select_top_by_feature_ranking(
     candidates.sort(key=lambda x: (-x[0], x[1]))
     selected = candidates[: max(0, int(max_num)+1)]
 
-    # Construct the output AbstractGraph with selected associations.
+    # Construct the output AbstractGraph with selected mapped subgraphs.
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
@@ -4597,15 +4605,15 @@ def binary_combination(
     ) -> 'AbstractGraph':
     """Emit interpretation nodes by pairing subgraphs from two AGs when their inter-distance is within bounds.
     Summary
-        Take one associated subgraph from the first AbstractGraph and one from the second; if the
-        shortest-path distance between them (in the shared preimage graph) lies within `distance`,
-        emit a new image node whose association is the union of both subgraphs’ node sets.
+        Take one mapped subgraph from the first AbstractGraph and one from the second; if the
+        shortest-path distance between them (in the shared base graph) lies within `distance`,
+        emit a new interpretation node whose mapped subgraph is the union of both subgraphs’ node sets.
 
     Semantics
-        - Input AG state: Reads image-node associations from two input AGs and uses the first AG’s
-          preimage_graph to compute distances.
-        - Output AG state: Returns a new AbstractGraph (with the first AG’s preimage_graph) whose
-          image nodes each represent a valid pairwise combination (union) of subgraphs.
+        - Input AG state: Reads interpretation-node mapped subgraphs from two input AGs and uses the first AG’s
+          base_graph to compute distances.
+        - Output AG state: Returns a new AbstractGraph (with the first AG’s base_graph) whose
+          interpretation nodes each represent a valid pairwise combination (union) of subgraphs.
         - Determinism: Deterministic given inputs and parameters.
 
     Parameters
@@ -4618,7 +4626,7 @@ def binary_combination(
         - Normalize `distance` via value_to_2tuple().
         - Compute pairwise distances via `get_distance_matrix(subgraphs1, subgraphs2, basegraph, ...)`.
         - Enumerate all pairs (i, j); keep only those whose distance is finite and within bounds.
-        - For each valid pair, form the union of nodes and create a new image node with that induced subgraph.
+        - For each valid pair, form the union of nodes and create a new interpretation node with that induced subgraph.
         - Attach provenance via `build_meta_from_function_context()`.
 
     Complexity
@@ -4628,8 +4636,8 @@ def binary_combination(
         - Practical usage suggests applying upstream filters to keep k1, k2 small.
 
     Side Effects & Metadata
-        - Each emitted image node stores:
-            * 'association' : induced subgraph on the unioned node set.
+        - Each emitted interpretation node stores:
+            * `mapped_subgraph` : induced subgraph on the unioned node set.
             * 'meta'        : {'source_function': 'binary_combination', 'params': {...}}.
         - Labels/attributes are not computed here; call `update()` to populate them.
 
@@ -4639,8 +4647,8 @@ def binary_combination(
         - Can be followed by size/connectivity filters to control combinatorial growth.
 
     Constraints & Invariants
-        - Assumes both AGs refer to the same underlying preimage node ID space.
-        - If either AG has zero associations, the output will be empty.
+        - Assumes both AGs refer to the same underlying base-graph node ID space.
+        - If either AG has zero mapped subgraphs, the output will be empty.
         - If `distance` is too strict, no pairs may be produced.
 
     Examples
@@ -4662,7 +4670,7 @@ def binary_combination(
     Failure Modes & Diagnostics
         - Large k1/k2 or loose distance bounds can cause quadratic blow-up in pairs.
         - Tight bounds (e.g., distance=(0,0)) may yield no combinations if subgraphs do not touch.
-        - Ensure both AGs share the same preimage graph; otherwise distances are undefined.
+        - Ensure both AGs share the same base graph; otherwise distances are undefined.
     """
     distance = value_to_2tuple(distance)
     out_abstract_graph = AbstractGraph(
@@ -4699,14 +4707,14 @@ def binary_intersection(
         For each pair consisting of one associated subgraph from the first AbstractGraph
         and one from the second, compute the intersection of their node sets. If the
         intersection satisfies the optional size bounds `node_size` and the connectivity
-        constraint `must_be_connected`, emit a new image node whose association is the
+        constraint `must_be_connected`, emit a new interpretation node whose mapped subgraph is the
         induced subgraph on the intersecting nodes.
 
     Semantics
-        - Input AG state: Reads image-node associations from both input AGs and uses the
-          first AG’s preimage_graph to induce intersection subgraphs.
-        - Output AG state: Returns a new AbstractGraph (with the first AG’s preimage_graph)
-          containing one image node per qualifying intersection.
+        - Input AG state: Reads interpretation-node mapped subgraphs from both input AGs and uses the
+          first AG’s base_graph to induce intersection subgraphs.
+        - Output AG state: Returns a new AbstractGraph (with the first AG’s base_graph)
+          containing one interpretation node per qualifying intersection.
         - Determinism: Deterministic given inputs and parameters.
 
     Parameters
@@ -4723,7 +4731,7 @@ def binary_intersection(
             * Compute I = nodes(a) ∩ nodes(b).
             * Apply size filter (if any).
             * If must_be_connected, require induced subgraph on I to have exactly 1 component.
-            * If accepted, create an image node for I.
+            * If accepted, create an interpretation node for I.
 
     Complexity
         - Time: O(k1 · k2 · d) where k1, k2 are counts of subgraphs in the two AGs,
@@ -4731,7 +4739,7 @@ def binary_intersection(
         - Memory: proportional to number and size of emitted intersections.
 
     Metadata
-        - Each output image node stores 'association' and 'meta' with source_function='binary_intersection'.
+        - Each output interpretation node stores `mapped_subgraph` and `meta` with source_function='binary_intersection'.
 
     Interactions
         - Complements `binary_combination` by intersecting instead of unioning pairs.
@@ -4813,7 +4821,7 @@ def unlabel(
         attribute of every node and edge to the same constant value.
 
     Semantics
-        - Input AG state: Reads preimage_graph of the given AbstractGraph.
+        - Input AG state: Reads base_graph of the given AbstractGraph.
         - Output AG state: Returns a new AbstractGraph with identical structure
           but with all 'label' fields overwritten to `label` and an
           'original_label' field preserving the previous value when absent.
@@ -4842,7 +4850,7 @@ def unlabel(
         qg2 = unlabel(qg1, label='-')
 
     Failure Modes
-        - If preimage_graph is empty, nothing is modified.
+        - If base_graph is empty, nothing is modified.
         - Only affects 'label' and introduces/preserves 'original_label'.
     """
     out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
@@ -4872,7 +4880,7 @@ def prepend_label(
         front of the existing label value.
 
     Semantics
-        - Input AG state: Reads preimage_graph of the given AbstractGraph.
+        - Input AG state: Reads base_graph of the given AbstractGraph.
         - Output AG state: Returns a new AbstractGraph with labels modified by
           prepending the chosen prefix.
         - Determinism: Deterministic given `label`.
@@ -4942,7 +4950,7 @@ def restore_label(
         'original_label' attribute after restoration.
 
     Semantics
-        - Input AG state: Reads and writes preimage_graph attributes.
+        - Input AG state: Reads and writes base_graph attributes.
         - Output AG state: Returns a new AbstractGraph with labels restored
           where possible.
         - Determinism: Deterministic given inputs.
@@ -5018,7 +5026,7 @@ def number_of_image_graph_nodes(
     abstract_graph: 'AbstractGraph',
     param=None
 ) -> int:
-    """Count the number of image nodes.
+    """Deprecated alias for counting interpretation nodes.
     Summary
         Return the total number of nodes in the interpretation graph of the AbstractGraph.
 
@@ -5045,7 +5053,7 @@ def number_of_image_graph_edges(
     abstract_graph: 'AbstractGraph',
     param=None
 ) -> int:
-    """Count the number of image edges.
+    """Deprecated alias for counting interpretation edges.
     Summary
         Return the total number of edges in the interpretation graph of the AbstractGraph.
 
@@ -5175,7 +5183,7 @@ try:
     from abstractgraph.xml import register_operator
 
     # List only operators that operate on and/or return AbstractGraph instances or pipelines.
-    # Scalar reducers (e.g., number_of_image_graph_nodes) are intentionally excluded from XML pipelines.
+    # Scalar reducers (for example, number_of_interpretation_graph_nodes) are intentionally excluded from XML pipelines.
     _AG_OPERATORS = [
         # Higher-order composition
         add,

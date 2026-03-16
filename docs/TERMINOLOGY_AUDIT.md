@@ -31,23 +31,23 @@ ML and display compatibility reads:
 These modules still read `mapped_subgraph` first and then fall back to
 `association`.
 
-## Category 2: Current Public APIs Not Yet Fully Renamed
+## Category 2: Current Active APIs Still Teaching Old Terms
 
-These are active non-legacy APIs that still expose old names.
+These are active non-legacy APIs whose names or docstrings still expose old
+terminology.
 
 Generative public surface in
 [conditional.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/conditional.py):
 
-- `target_image_graph`
-- `image_graphs`
 - `_image_node_type(...)`
 - image-oriented docstrings around node ordering and target selection
+- parameter names like `target_image` in internal helper calls
 
 Generative public surface in
 [autoregressive.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/autoregressive.py):
 
-- `fixed_image_graph`
 - image-oriented pruning terminology
+- deprecated compatibility aliases `fixed_image_graph` and `return_image_steps`
 
 These should be handled in an explicit staged API pass, not opportunistically.
 
@@ -69,12 +69,15 @@ Remaining generative documentation debt:
 - [rewrite.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/rewrite.py)
 - lower-priority method docstrings in
   [conditional.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/conditional.py)
+- [README_CONTITIONAL_AUTOREGRESSIVE.md](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/README_CONTITIONAL_AUTOREGRESSIVE.md)
+  still has some compatibility-facing mentions of `preimage_cut_radius`
 
 Notebook/example debt still tied to old public names:
 
 - core notebooks that still use `number_of_image_graph_nodes(...)`
-- generative notebooks that still use `image_graph` variables because the
-  current public generator API still exposes them
+- generative notebooks that still use `preimage_cut_radius`,
+  `image_cut_radius`, `fixed_image_graph`, or `return_image_steps`
+- notebook prose that still says `preimage` / `image` when explaining active flows
 
 ## Category 4: Explicit Legacy Boundary
 
@@ -91,7 +94,9 @@ bug.
 
 1. Finish the docstring rewrite in
    [operators.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/operators.py).
-2. Decide whether generative public names like `target_image_graph` and
-   `fixed_image_graph` will receive canonical aliases in the next release.
+2. Finish the remaining current generative docstring cleanup in
+   [conditional.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/conditional.py)
+   and
+   [rewrite.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph-generative/src/abstractgraph_generative/rewrite.py).
 3. Update notebooks that still intentionally demonstrate deprecated helper
    names once the corresponding public alias plan is final.

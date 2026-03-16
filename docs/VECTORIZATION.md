@@ -3,12 +3,6 @@
 This document explains the main idea behind vectorization in the current
 `abstractgraph` codebase.
 
-The implementation still uses the legacy names `preimage_graph` and
-`image_graph` in code. In the newer conceptual language, these correspond to:
-
-- `preimage_graph` -> base graph
-- `image_graph` -> interpretation graph
-
 The vectorization stack turns an `AbstractGraph` into machine-learning-ready
 features by counting how interpretation structures attach back to base-graph
 nodes.
@@ -51,15 +45,15 @@ The relevant implementation lives in:
 
 An `AbstractGraph` stores:
 
-- `preimage_graph`: the original graph
-- `image_graph`: a graph whose nodes store associated subgraphs of the
-  preimage graph
+- `base_graph`: the original graph
+- `interpretation_graph`: a graph whose nodes store mapped subgraphs of the
+  base graph
 
-Each image node typically has:
+Each interpretation node typically has:
 
-- `association`: the associated preimage subgraph
+- `mapped_subgraph`: the mapped base subgraph
 - `label`: a bounded integer feature id
-- `attribute`: a scalar or vector weight contributed by that image node
+- `attribute`: a scalar or vector weight contributed by that interpretation node
 - `meta`: operator provenance or user metadata
 
 ## How Labels Are Built
@@ -67,7 +61,7 @@ Each image node typically has:
 The default vectorization path uses
 `graph_hash_label_function_factory(nbits)`.
 
-That label function hashes each image node's `association` subgraph with
+That label function hashes each interpretation node's `mapped_subgraph` with
 `hash_graph(...)` and maps it into a bounded range determined by `nbits`.
 
 Important implementation detail:
@@ -95,16 +89,16 @@ The core counting logic is in
 
 The process is:
 
-1. apply the image-node label function
-2. apply the image-node attribute function
-3. for each base node, collect the set of image nodes whose associated
+1. apply the interpretation-node label function
+2. apply the interpretation-node attribute function
+3. for each base node, collect the set of interpretation nodes whose mapped
    subgraphs contain that base node
-4. for each such image node, add its attribute vector into the feature slice
+4. for each such interpretation node, add its attribute vector into the feature slice
    corresponding to its label
 
 So each row describes the interpretation context of one base node.
 
-If an image node has scalar attribute `1`, it contributes a count.
+If an interpretation node has scalar attribute `1`, it contributes a count.
 If it has a vector attribute, it contributes that vector into the slice for its
 label.
 
@@ -118,7 +112,7 @@ The public `vectorize(...)` function in
 starts from `to_array()` and then overwrites the first two columns:
 
 - column `0` becomes all ones
-- column `1` becomes the degree of each base node in the preimage graph
+- column `1` becomes the degree of each base node in the base graph
 
 The result is a node-feature matrix where each row contains:
 
@@ -136,7 +130,7 @@ There are two public transformer classes in
 `AbstractGraphNodeTransformer`
 
 - converts each input graph into an `AbstractGraph`
-- creates a default image node
+- creates a default interpretation node
 - applies a decomposition function
 - returns the node-level feature matrix produced by `vectorize(...)`
 
@@ -183,13 +177,13 @@ especially when `nbits` is small.
 The codebase does not stop at hashing.
 
 [feature_subgraphs.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/feature_subgraphs.py)
-groups representative associated subgraphs by image-node label across a set of
+groups representative mapped subgraphs by interpretation-node label across a set of
 graphs.
 
 That module lets you inspect:
 
 - which hashed labels appear
-- which associated subgraphs produced them
+- which mapped subgraphs produced them
 - recurring representative subgraphs for a given label
 
 So the intended workflow is:
@@ -218,8 +212,7 @@ interpretation graph, while the vector is only the downstream ML encoding.
 
 ## Current Limitations and Notes
 
-- The code still uses `preimage` / `image` terminology even though the newer
-  conceptual language is `base` / `interpretation`.
+- Some compatibility aliases still exist in the API for one migration window.
 - The default label function hashes the full associated subgraph, so feature
   identity depends on the graph hashing scheme.
 - Collisions are unavoidable in bounded hashing.
@@ -232,7 +225,7 @@ interpretation graph, while the vector is only the downstream ML encoding.
 
 Vectorization in `abstractgraph` is a projection-and-count pipeline:
 
-- generate interpretation nodes from associated subgraphs
+- generate interpretation nodes from mapped base subgraphs
 - hash each interpreted subgraph into a bounded label
 - project those labels back to the base nodes contained in each subgraph
 - count them into node-level feature rows
