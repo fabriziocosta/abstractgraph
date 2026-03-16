@@ -52,6 +52,8 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 - [docs/OPERATORS.md](docs/OPERATORS.md)
 - [docs/VECTORIZATION.md](docs/VECTORIZATION.md)
 - [docs/WHITE_PAPER.md](docs/WHITE_PAPER.md)
+- [docs/RELEASE_TERMINOLOGY_MIGRATION.md](docs/RELEASE_TERMINOLOGY_MIGRATION.md)
+- [docs/MIGRATION_TERMINOLOGY.md](docs/MIGRATION_TERMINOLOGY.md)
 - [ECOSYSTEM.md](ECOSYSTEM.md)
 
 ## Notebooks

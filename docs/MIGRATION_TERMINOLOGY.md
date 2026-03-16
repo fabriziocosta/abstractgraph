@@ -32,6 +32,18 @@ The canonical model is:
 
 The migration is staged, not immediate.
 
+The current policy is:
+
+- the current release line is the compatibility release line
+- deprecated aliases remain supported across the current release line
+- new code, new examples, and active documentation should use only canonical
+  names
+- alias removal should happen in the next planned breaking cleanup pass after
+  the compatibility release line
+
+Until a versioned release process is defined more formally, treat the next
+breaking cleanup pass as the point where deprecated aliases may be removed.
+
 Currently supported deprecated aliases include:
 
 - `AbstractGraph.preimage_graph`
@@ -112,14 +124,28 @@ Explicit legacy namespaces may retain old vocabulary temporarily for backward
 compatibility, but active non-legacy code and active documentation should
 converge on the canonical terms above.
 
-## Removal Planning
+## Removal Plan
 
-Before removing deprecated aliases, the project should explicitly decide:
+The intended removal grouping is:
 
-- which release is the last compatibility release
-- which public aliases will be removed together
-- whether current generative helper names like `_image_node_type(...)` are
-  merely private implementation debt or should also receive canonical wrappers
+- core aliases:
+  `preimage_graph`, `image_graph`, `association`,
+  `create_*image_node*`, `get_image_nodes_associations()`,
+  `get_preimage_nodes_inverse_associations()`
+- generative aliases:
+  `preimage_cut_radius`, `image_cut_radius`, `image_graph_pool`,
+  `generate(..., image_graphs=...)`, `fixed_image_graph`,
+  `return_image_steps`
+
+Private helper names do not define the compatibility contract. They should be
+cleaned opportunistically, but the removal plan is driven by public API and
+user-facing documentation first.
+
+Before the removal pass, the project should confirm:
+
+- the last compatibility release line
+- the exact set of aliases removed together
+- whether any remaining compatibility reads should start warning first
 
 See [TERMINOLOGY_AUDIT.md](TERMINOLOGY_AUDIT.md) for the current remaining
 surface.
