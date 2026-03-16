@@ -14,7 +14,7 @@ def vectorize(abstract_graph: "AbstractGraph", nbits: int = 10, return_dense: bo
     Vectorize an AbstractGraph into node-level feature rows.
 
     The first column is a bias term of ones, and the second column stores
-    preimage node degree. Remaining columns are hashed label buckets from
+    base-node degree. Remaining columns are hashed label buckets from
     AbstractGraph.to_array().
 
     Args:
@@ -43,8 +43,8 @@ def vectorize(abstract_graph: "AbstractGraph", nbits: int = 10, return_dense: bo
         # Re-raise with a more specific context if needed, or just let it propagate.
         raise ValueError(f"Failed to generate base array using to_array. Original error: {e}")
 
-    # 3. Get preimage graph info AND degrees in the correct order
-    base_graph = abstract_graph.preimage_graph
+    # 3. Get base graph info and degrees in the correct order.
+    base_graph = abstract_graph.base_graph
     # Ensure the node order matches the row order implicitly used by to_array
     base_nodes: List[Any] = list(base_graph.nodes())
     n = len(base_nodes)
@@ -138,9 +138,9 @@ class AbstractGraphTransformer:
             Any: 1 x n_features dense array or CSR matrix.
         """
         # Create the AbstractGraph from the input graph using the provided graph.
-        # The following call creates a AbstractGraph and populates its image_graph with a default node.
+        # The following call creates an AbstractGraph and populates its interpretation graph.
         ag = AbstractGraph(graph=graph)
-        ag.create_default_image_node()
+        ag.create_default_interpretation_node()
         # Apply the provided decomposition function.
         ag = self.decomposition_function(ag)
         # Vectorize the abstract graph.
@@ -252,7 +252,7 @@ class AbstractGraphNodeTransformer:
         """
         # Create the AbstractGraph from the input graph.
         ag = AbstractGraph(graph=graph)
-        ag.create_default_image_node()
+        ag.create_default_interpretation_node()
         # Apply the provided decomposition function.
         ag = self.decomposition_function(ag)
         # Vectorize the abstract graph.

@@ -7,7 +7,7 @@ import networkx as nx
 import numpy as np
 
 from abstractgraph.display import get_color, stable_hash
-from abstractgraph.graphs import AbstractGraph, graphs_to_abstract_graphs
+from abstractgraph.graphs import AbstractGraph, get_mapped_subgraph, graphs_to_abstract_graphs
 from abstractgraph.hashing import hash_graph
 from abstractgraph.labels import graph_hash_label_function_factory
 
@@ -17,7 +17,7 @@ def feature_subgraphs(
     decomposition_function: Callable[[AbstractGraph], AbstractGraph],
     nbits: int = 10,
 ) -> DefaultDict[Any, List[nx.Graph]]:
-    """Collect every unique pre-image subgraph grouped by its image-node label."""
+    """Collect every unique mapped base subgraph grouped by interpretation-node label."""
 
     label_map: DefaultDict[Any, List[nx.Graph]] = defaultdict(list)
     seen_hashes: DefaultDict[Any, Set[int]] = defaultdict(set)
@@ -28,20 +28,20 @@ def feature_subgraphs(
         nbits=nbits,
     ):
         
-        image_graph = abstract_graph.image_graph
-        if image_graph is None:
+        interpretation_graph = abstract_graph.interpretation_graph
+        if interpretation_graph is None:
             continue
 
-        for _, data in image_graph.nodes(data=True):
+        for _, data in interpretation_graph.nodes(data=True):
             label = data.get("label")
-            association = data.get("association")
-            if label is None or association is None:
+            mapped_subgraph = get_mapped_subgraph(data)
+            if label is None or mapped_subgraph is None:
                 continue
-            association_hash = hash_graph(association, nbits=19)
-            if association_hash in seen_hashes[label]:
+            mapped_subgraph_hash = hash_graph(mapped_subgraph, nbits=19)
+            if mapped_subgraph_hash in seen_hashes[label]:
                 continue
-            seen_hashes[label].add(association_hash)
-            label_map[label].append(association.copy())
+            seen_hashes[label].add(mapped_subgraph_hash)
+            label_map[label].append(mapped_subgraph.copy())
 
     return label_map
 
@@ -54,7 +54,7 @@ def display_feature_subgraphs(
     figsize_per_cell: Tuple[float, float] = (2.3, 2.3),
     color_map: str = "hsv",
 ) -> DefaultDict[Any, List[nx.Graph]]:
-    """Render every unique pre-image subgraph grouped by its image-node label."""
+    """Render every unique mapped base subgraph grouped by interpretation-node label."""
 
     def _node_colors(subgraph: nx.Graph) -> List[Any]:
         colors: List[Any] = []
@@ -114,6 +114,6 @@ def display_feature_subgraphs(
                 for spine in ax.spines.values():
                     spine.set_visible(False)
 
-        fig.suptitle(f"Image label {label} ({num} unique subgraphs)", y=1.02)
+        fig.suptitle(f"Interpretation label {label} ({num} unique subgraphs)", y=1.02)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
         plt.show()

@@ -2,18 +2,25 @@
 
 import networkx as nx
 import numpy as np
-from typing import Optional, Callable, Any, List, Iterable, Tuple, Dict, Set 
+from typing import Optional, Callable, Any, List, Iterable, Tuple, Dict, Set
 from abstractgraph.hashing import hash_bounded, hash_graph
 
 
 DEFAULT_NBITS = 14
+
+
+def _get_mapped_subgraph(node_attrs: dict) -> Optional[nx.Graph]:
+    mapped_subgraph = node_attrs.get("mapped_subgraph")
+    if mapped_subgraph is not None:
+        return mapped_subgraph
+    return node_attrs.get("association")
 
 #==========================================================================================
 # Label functions for AbstractGraph
 #==========================================================================================
 def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
     """
-    Build a label function that hashes the association subgraph.
+    Build a label function that hashes the mapped base subgraph.
 
     Args:
         nbits: The number of bits for the hash output (default: 14).
@@ -22,16 +29,16 @@ def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[d
         Callable[[dict], int]: Label function mapping node attrs to an integer hash.
     """
     def label_fn(node_attrs: dict) -> int:
-        subgraph = node_attrs.get("association", None)
+        subgraph = _get_mapped_subgraph(node_attrs)
         if subgraph is None:
-            raise ValueError("Node attributes must contain an 'association' key.")
+            raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
         return hash_graph(subgraph, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
     return label_fn
 
 def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
     """
-    Build a label function that hashes only association structure.
+    Build a label function that hashes only mapped-subgraph structure.
 
     Args:
         nbits: The number of bits for the hash output (default: 14).
@@ -40,9 +47,9 @@ def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> C
         Callable[[dict], int]: Label function using structure-only hashing.
     """
     def label_fn(node_attrs: dict) -> int:
-        subgraph = node_attrs.get("association", None)
+        subgraph = _get_mapped_subgraph(node_attrs)
         if subgraph is None:
-            raise ValueError("Node attributes must contain an 'association' key.")
+            raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
 
         # Copy and sanitize node and edge labels
         structure_graph = subgraph.copy()
@@ -98,7 +105,7 @@ def source_chain_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Call
 
 def name_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
     """
-    Build a label function that hashes a user-defined image-node name.
+    Build a label function that hashes a user-defined interpretation-node name.
 
     Falls back to meta["source_chain"] so it can be used without the name operator.
 
@@ -158,7 +165,7 @@ def mean_attribute_function(subgraph: nx.Graph) -> np.ndarray:
 
 def intersection_edge_function(abstract_graph: "AbstractGraph") -> "AbstractGraph":
     """
-    Add image-graph edges for intersecting associations.
+    Add interpretation-graph edges for intersecting mapped subgraphs.
 
     Args:
         abstract_graph: The AbstractGraph instance to update with new edges.
@@ -166,16 +173,17 @@ def intersection_edge_function(abstract_graph: "AbstractGraph") -> "AbstractGrap
     Returns:
         AbstractGraph: The updated AbstractGraph instance.
     """
-    nodes = list(abstract_graph.image_graph.nodes)
+    nodes = list(abstract_graph.interpretation_graph.nodes)
     for i, node1 in enumerate(nodes):
         for node2 in nodes[i + 1 :]:
-            subgraph1 = abstract_graph.image_graph.nodes[node1]["association"]
-            subgraph2 = abstract_graph.image_graph.nodes[node2]["association"]
+            subgraph1 = _get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[node1])
+            subgraph2 = _get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[node2])
             shared_count = len(set(subgraph1.nodes) & set(subgraph2.nodes))
             if shared_count > 0:
-                abstract_graph.image_graph.add_edge(
+                abstract_graph.interpretation_graph.add_edge(
                     node1,
                     node2,
+                    shared_base_nodes=shared_count,
                     shared_preimage_nodes=shared_count,
                 )
     return abstract_graph

@@ -12,7 +12,7 @@
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  filter_by_sampling
 # BINARY OPERATORS:  binary_combination  binary_intersection
-# PRE-IMAGE GRAPH OPERATORS: unlabel  prepend_label  restore_label
+# BASE GRAPH OPERATORS: unlabel  prepend_label  restore_label
 # SCALAR OPERATORS: number_of_image_graph_nodes  number_of_image_graph_edges  quantile_number_of_subgraph_nodes  quantile_number_of_subgraph_edges  max_number_of_subgraph_nodes  min_number_of_subgraph_nodes  max_number_of_subgraph_edges  min_number_of_subgraph_edges
 #====================================================================================================
 
@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from itertools import combinations, product
 from networkx.algorithms.community import kernighan_lin_bisection
-from abstractgraph.graphs import AbstractGraph
+from abstractgraph.graphs import AbstractGraph, get_mapped_subgraph
 from abstractgraph.hashing import hash_set
 from abstractgraph.xml import operator_to_xml_string
 import random
@@ -620,7 +620,7 @@ def if_then_else(
         workflow = forward_compose(
             connected_component(),
             if_then_else(
-                predicate=lambda ag: ag.image_graph.number_of_nodes() > 10,
+                predicate=lambda ag: ag.interpretation_graph.number_of_nodes() > 10,
                 then_function=merge(),
                 else_function=cycle()
             ),
@@ -704,9 +704,9 @@ def if_then_elif_else(
             connected_component(),
             if_then_elif_else(
                 conditions_functions=[
-                    (lambda ag: ag.image_graph.number_of_nodes() > 20, merge()),
-                    (lambda ag: ag.image_graph.number_of_nodes() > 10, cycle()),
-                    (lambda ag: ag.image_graph.number_of_nodes() > 5, clique())
+                    (lambda ag: ag.interpretation_graph.number_of_nodes() > 20, merge()),
+                    (lambda ag: ag.interpretation_graph.number_of_nodes() > 10, cycle()),
+                    (lambda ag: ag.interpretation_graph.number_of_nodes() > 5, clique())
                 ],
                 else_function=path()
             ),
@@ -860,7 +860,7 @@ def while_loop(
             connected_component(),
             while_loop(
                 cycle(),
-                predicate=lambda ag: ag.image_graph.number_of_nodes() > 5,
+                predicate=lambda ag: ag.interpretation_graph.number_of_nodes() > 5,
                 max_iterations=10
             ),
             merge()
@@ -980,12 +980,12 @@ def random_part(
             * Emit one image node for each sample.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         nodes = list(subgraph.nodes())
         if not nodes:
             continue
@@ -1006,7 +1006,7 @@ def random_part(
                 largest = max(components, key=len)
             except ValueError:
                 continue
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 largest,
                 meta=build_meta_from_function_context()
             )
@@ -1081,16 +1081,16 @@ def node(
         - Ensure downstream operators handle large numbers of singletons efficiently.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = [[node] for node in subgraph.nodes()]
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1166,15 +1166,15 @@ def edge(
         - Directed graphs yield ordered edge pairs; ensure downstream operators handle orientation if relevant.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = list(subgraph.edges())
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1268,16 +1268,16 @@ def connected_component(
         - Excessive instance counts if the input associations are highly fragmented; mitigate with size filters.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = connected_component_decomposition_function(subgraph)
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1378,20 +1378,20 @@ def degree(
     """
     value = value_to_2tuple(value)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = degree_decomposition_function(
             subgraph,
             min_degree=min(value),
             max_degree=max(value)
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1505,13 +1505,13 @@ def split(
         raise ValueError("n_parts must be an integer >= 1.")
 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
     
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         def _connected_parts_from_nodes(nodes):
             induced = subgraph.subgraph(nodes)
             if nx.is_directed(subgraph):
@@ -1561,7 +1561,7 @@ def split(
                 break
 
         for part in parts:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 list(part),
                 meta=build_meta_from_function_context()
             )
@@ -1678,17 +1678,17 @@ def neighborhood(
     """
     radius = value_to_2tuple(radius)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         for r in range(min(radius), max(radius) + 1):
             for source in subgraph.nodes():
                 component = get_reachable_nodes_bfs(subgraph, source, cutoff=r)
-                out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+                out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                     component,
                     meta=build_meta_from_function_context()
                 )
@@ -1809,16 +1809,16 @@ def cycle(
         - Chemistry: aromatic rings or other cyclic motifs.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = cycle_decomposition_function(subgraph)
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1874,16 +1874,16 @@ def tree(
         - Tiny graphs (<2 nodes) may not yield meaningful components.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = non_cycle_decomposition_function(subgraph)
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -1988,20 +1988,20 @@ def path(
     """
     number_of_edges = value_to_2tuple(number_of_edges)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = path_decomposition_function(
             subgraph,
             min_number_of_edges=min(number_of_edges),
             max_number_of_edges=max(number_of_edges)
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -2099,13 +2099,13 @@ def graphlet(
     """
     number_of_nodes = value_to_2tuple(number_of_nodes) 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = graphlet_decomposition_function(
             subgraph,
             radius=radius,
@@ -2113,7 +2113,7 @@ def graphlet(
             max_number_of_nodes=max(number_of_nodes)
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -2201,20 +2201,20 @@ def clique(
     """
     number_of_nodes = value_to_2tuple(number_of_nodes)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = clique_decomposition_function(
             subgraph,
             min_number_of_nodes=min(number_of_nodes),
             max_number_of_nodes=max(number_of_nodes)
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -2281,16 +2281,16 @@ def complement(
         - Complement size may dwarf the original subgraph; consider filtering.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         component = list(subgraph.nodes())
-        component = set(abstract_graph.preimage_graph.nodes()).difference(set(component))
-        out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+        component = set(abstract_graph.base_graph.nodes()).difference(set(component))
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
             component,
             meta=build_meta_from_function_context()
         )
@@ -2317,25 +2317,25 @@ def edge_complement(
         where each association is the edge-induced complement subgraph.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    is_directed = nx.is_directed(abstract_graph.preimage_graph)
+    is_directed = nx.is_directed(abstract_graph.base_graph)
 
     def edge_key(edge):
         u, v = edge
         return (u, v) if is_directed else frozenset((u, v))
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         subgraph_edge_keys = {edge_key(e) for e in subgraph.edges()}
         complement_edges = [
-            e for e in abstract_graph.preimage_graph.edges()
+            e for e in abstract_graph.base_graph.edges()
             if edge_key(e) not in subgraph_edge_keys
         ]
-        out_abstract_graph.create_image_node_with_subgraph_from_edges(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
             complement_edges,
             meta=build_meta_from_function_context()
         )
@@ -2426,20 +2426,20 @@ def betweenness_centrality(
         - If number_of_nodes exceeds subgraph size, returns all nodes.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = betweenness_centrality_decomposition_function(
             subgraph,
             number_of_nodes=number_of_nodes,
             use_perifery=use_perifery
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -2484,19 +2484,19 @@ def betweenness_centrality_split(
         subgraph of one chunk from the betweenness-ranked node list.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = betweenness_centrality_split_decomposition_function(
             subgraph,
             number_of_nodes=number_of_nodes
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -2579,19 +2579,19 @@ def betweenness_centrality_hop_split(
         connected component from the hop-window decomposition.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = betweenness_centrality_hop_split_decomposition_function(
             subgraph,
             n_hops=n_hops
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -3174,13 +3174,13 @@ def low_cut_partition(
         AbstractGraph: New AbstractGraph with one image node per partition part.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = low_cut_partition_decomposition_function(
             subgraph,
             target_max_boundary_nodes=target_max_boundary_nodes,
@@ -3201,7 +3201,7 @@ def low_cut_partition(
             seed=seed,
         )
         for component in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
                 meta=build_meta_from_function_context()
             )
@@ -3271,7 +3271,7 @@ def merge(
         - `use_edges=True` produces edges but may result in disconnected node sets.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -3279,19 +3279,17 @@ def merge(
 
     if use_edges:
         component = []
-        for subgraph in abstract_graph.get_image_nodes_associations():
+        for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
             component.extend(subgraph.edges())
-        # Deduplicate edges while preserving order.
-        # dedup_edges = list(dict.fromkeys(component))
-        out_abstract_graph.create_image_node_with_subgraph_from_edges(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
             component,
             meta=build_meta_from_function_context()
         )
     else:
         component = []
-        for subgraph in abstract_graph.get_image_nodes_associations():
+        for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
             component.extend(subgraph.nodes())
-        out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
             component,
             meta=build_meta_from_function_context()
         )
@@ -3319,7 +3317,7 @@ def deduplicate(
         - Carry over meta/label/attribute for kept nodes; remap edges accordingly.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -3331,26 +3329,24 @@ def deduplicate(
     seen = set()
     old_to_new = {}
 
-    for old_id, data in abstract_graph.image_graph.nodes(data=True):
-        assoc = data.get("association")
-        if assoc is None:
+    for old_id, data in abstract_graph.interpretation_graph.nodes(data=True):
+        mapped_subgraph = get_mapped_subgraph(data)
+        if mapped_subgraph is None:
             continue
-        k = key_fn(assoc)
+        k = key_fn(mapped_subgraph)
         if k in seen:
             continue
         seen.add(k)
         meta = dict(data.get("meta", {}))
-        # Use the private constructor to get the new id back
-        new_id = out_abstract_graph._add_image_node(association=assoc.copy(), meta=meta)
+        new_id = out_abstract_graph._add_interpretation_node(mapped_subgraph=mapped_subgraph.copy(), meta=meta)
         for attr_name in ("label", "attribute"):
             if attr_name in data:
-                out_abstract_graph.image_graph.nodes[new_id][attr_name] = data[attr_name]
+                out_abstract_graph.interpretation_graph.nodes[new_id][attr_name] = data[attr_name]
         old_to_new[old_id] = new_id
 
-    # Preserve image-graph edges between retained nodes
-    for u, v, edata in abstract_graph.image_graph.edges(data=True):
+    for u, v, edata in abstract_graph.interpretation_graph.edges(data=True):
         if u in old_to_new and v in old_to_new:
-            out_abstract_graph.image_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
+            out_abstract_graph.interpretation_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
 
     return out_abstract_graph
 
@@ -3376,27 +3372,27 @@ def remove_redundant_associations(
         AbstractGraph: A new AbstractGraph with covered smaller associations removed.
     """
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    is_directed = nx.is_directed(abstract_graph.preimage_graph)
+    is_directed = nx.is_directed(abstract_graph.base_graph)
 
     def edge_key(edge):
         u, v = edge
         return (u, v) if is_directed else frozenset((u, v))
 
-    image_nodes_data = list(abstract_graph.image_graph.nodes(data=True))
+    image_nodes_data = list(abstract_graph.interpretation_graph.nodes(data=True))
     assoc_cache = {}
     for old_id, data in image_nodes_data:
-        assoc = data.get("association")
-        if not isinstance(assoc, nx.Graph):
-            assoc = nx.Graph()
-        nodes = set(assoc.nodes())
-        edges = {edge_key(e) for e in assoc.edges()}
-        assoc_cache[old_id] = (assoc, nodes, edges, data)
+        mapped_subgraph = get_mapped_subgraph(data)
+        if not isinstance(mapped_subgraph, nx.Graph):
+            mapped_subgraph = nx.Graph()
+        nodes = set(mapped_subgraph.nodes())
+        edges = {edge_key(e) for e in mapped_subgraph.edges()}
+        assoc_cache[old_id] = (mapped_subgraph, nodes, edges, data)
 
     def is_strictly_covered(smaller_id, larger_id):
         _a_assoc, a_nodes, a_edges, _a_data = assoc_cache[smaller_id]
@@ -3421,17 +3417,17 @@ def remove_redundant_associations(
 
     old_to_new = {}
     for old_id in kept_old_ids:
-        assoc, _nodes, _edges, data = assoc_cache[old_id]
+        mapped_subgraph, _nodes, _edges, data = assoc_cache[old_id]
         meta = dict(data.get("meta", {}))
-        new_id = out_abstract_graph._add_image_node(association=assoc.copy(), meta=meta)
+        new_id = out_abstract_graph._add_interpretation_node(mapped_subgraph=mapped_subgraph.copy(), meta=meta)
         for attr_name in ("label", "attribute"):
             if attr_name in data:
-                out_abstract_graph.image_graph.nodes[new_id][attr_name] = data[attr_name]
+                out_abstract_graph.interpretation_graph.nodes[new_id][attr_name] = data[attr_name]
         old_to_new[old_id] = new_id
 
-    for u, v, edata in abstract_graph.image_graph.edges(data=True):
+    for u, v, edata in abstract_graph.interpretation_graph.edges(data=True):
         if u in old_to_new and v in old_to_new:
-            out_abstract_graph.image_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
+            out_abstract_graph.interpretation_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
 
     return out_abstract_graph
 
@@ -3488,7 +3484,7 @@ def intersection(
         node_size = value_to_2tuple(node_size)
 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -3497,10 +3493,10 @@ def intersection(
     # Work on unordered pairs to avoid duplicates (u,v) and (v,u)
     # Additionally, deduplicate identical intersections across different pairs.
     seen = set()  # set[frozenset]
-    img_nodes = list(abstract_graph.image_graph.nodes())
+    img_nodes = list(abstract_graph.interpretation_graph.nodes())
     for u, v in combinations(img_nodes, 2):
-        sub_u = abstract_graph.image_graph.nodes[u].get('association')
-        sub_v = abstract_graph.image_graph.nodes[v].get('association')
+        sub_u = get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[u])
+        sub_v = get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[v])
         if sub_u is None or sub_v is None:
             continue
         inter_nodes = set(sub_u.nodes()).intersection(sub_v.nodes())
@@ -3517,7 +3513,7 @@ def intersection(
         if must_be_connected:
             if inter_len == 0:
                 continue
-            induced = abstract_graph.preimage_graph.subgraph(inter_nodes)
+            induced = abstract_graph.base_graph.subgraph(inter_nodes)
             try:
                 cc_count = len(list(nx.connected_components(induced)))
             except Exception:
@@ -3530,7 +3526,7 @@ def intersection(
             continue
         seen.add(key)
 
-        out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
             inter_nodes,
             meta=build_meta_from_function_context()
         )
@@ -3705,20 +3701,20 @@ def combination(
     number_of_elements = value_to_2tuple(number_of_elements)
     distance = value_to_2tuple(distance)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
     components = combination_decomposition_function(
-        abstract_graph.get_image_nodes_associations(), 
-        abstract_graph.preimage_graph, 
+        abstract_graph.get_interpretation_nodes_mapped_subgraphs(),
+        abstract_graph.base_graph,
         number_of_elements=number_of_elements, 
         distance=distance
     )
     for component in components:
-        out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
             component,
             meta=build_meta_from_function_context()
         )
@@ -3765,13 +3761,13 @@ def union_of_shortest_paths(
     abstract_graph: 'AbstractGraph',
     length=(1, 3)
 ) -> 'AbstractGraph':
-    """Emit one image node per node pair whose shortest paths fall within bounds."""
+    """Emit one interpretation node per node pair whose shortest paths fall within bounds."""
     length = value_to_2tuple(length)
     min_len = max(0, int(min(length)))
     max_len = int(max(length))
 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -3780,14 +3776,14 @@ def union_of_shortest_paths(
     if max_len < 0:
         return out_abstract_graph
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         components = union_of_shortest_paths_decomposition_function(
             subgraph,
             min_len=min_len,
             max_len=max_len,
         )
         for component_nodes in components:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component_nodes,
                 meta=build_meta_from_function_context(),
             )
@@ -3804,7 +3800,7 @@ def intersection_edges(
     size_threshold=1,
     accept_connection_by_edge=False
 ) -> 'AbstractGraph':
-    """Add edges between image nodes whose subgraphs overlap or are adjacent.
+    """Add edges between interpretation nodes whose mapped subgraphs overlap or are adjacent.
     Summary
         For each pair of image nodes, add an edge in the image graph if:
         - Their associated subgraphs share at least `size_threshold` nodes, OR
@@ -3872,18 +3868,22 @@ def intersection_edges(
     out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
     
     # Determine the graph to use for edge queries.
-    if isinstance(abstract_graph.preimage_graph, AbstractGraph):
-        pre_img = abstract_graph.preimage_graph.image_graph
+    if isinstance(abstract_graph.base_graph, AbstractGraph):
+        pre_img = abstract_graph.base_graph.interpretation_graph
     else:
-        pre_img = abstract_graph.preimage_graph
+        pre_img = abstract_graph.base_graph
 
-    for u in abstract_graph.image_graph.nodes():
-        subgraph_u = abstract_graph.image_graph.nodes[u]["association"]
+    for u in abstract_graph.interpretation_graph.nodes():
+        subgraph_u = get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[u])
+        if subgraph_u is None:
+            continue
         nodes_u = list(subgraph_u.nodes())
         set_u = set(nodes_u)
-        for v in abstract_graph.image_graph.nodes():
+        for v in abstract_graph.interpretation_graph.nodes():
             if u != v:
-                subgraph_v = abstract_graph.image_graph.nodes[v]["association"]
+                subgraph_v = get_mapped_subgraph(abstract_graph.interpretation_graph.nodes[v])
+                if subgraph_v is None:
+                    continue
                 nodes_v = list(subgraph_v.nodes())
                 set_v = set(nodes_v)
 
@@ -3905,7 +3905,7 @@ def intersection_edges(
                             break
 
                 if add_edge:
-                    out_abstract_graph.image_graph.add_edge(
+                    out_abstract_graph.interpretation_graph.add_edge(
                         u,
                         v,
                         shared_preimage_nodes=shared_count,
@@ -3983,16 +3983,16 @@ def filter_by_number_of_connected_components(
     """
     number_of_components = value_to_2tuple(number_of_components)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         cc = list(nx.connected_components(subgraph))
         if min(number_of_components) <= len(cc) <= max(number_of_components):
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(subgraph.nodes())
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
     
     return out_abstract_graph
 
@@ -4063,16 +4063,16 @@ def filter_by_number_of_nodes(
     """
     number_of_nodes = value_to_2tuple(number_of_nodes)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         if subgraph.number_of_nodes() >= min(number_of_nodes):
             if subgraph.number_of_nodes() <= max(number_of_nodes): 
-                out_abstract_graph.create_image_node_with_subgraph_from_nodes(subgraph.nodes())
+                out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
     
     return out_abstract_graph
 
@@ -4141,16 +4141,16 @@ def filter_by_number_of_edges(
     """
     number_of_edges = value_to_2tuple(number_of_edges)
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         if subgraph.number_of_edges() >= min(number_of_edges):
             if subgraph.number_of_edges() <= max(number_of_edges): 
-                out_abstract_graph.create_image_node_with_subgraph_from_nodes(subgraph.nodes())
+                out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
     
     return out_abstract_graph
 
@@ -4161,7 +4161,7 @@ def filter_by_sampling(
     n_samples=1,
     seed: Optional[int] = None
     ) -> 'AbstractGraph':
-    """Randomly subsample image nodes.
+    """Randomly subsample interpretation nodes.
     Summary
         Keep a random subset of image nodes and their edges. Supports absolute
         counts (int) or fractions (float in (0,1)); sampling is without replacement.
@@ -4192,19 +4192,19 @@ def filter_by_sampling(
         - Fractions round down; min 1 to avoid empty result unless n_samples ≤ 0.
         - Special-case delegation ignores `seed` (random_part is non-deterministic).
     """
-    associations = abstract_graph.get_image_nodes_associations()
+    mapped_subgraphs = abstract_graph.get_interpretation_nodes_mapped_subgraphs()
     if (
-        len(associations) == 1
-        and associations[0].number_of_nodes() == abstract_graph.preimage_graph.number_of_nodes()
-        and associations[0].number_of_edges() == abstract_graph.preimage_graph.number_of_edges()
+        len(mapped_subgraphs) == 1
+        and mapped_subgraphs[0].number_of_nodes() == abstract_graph.base_graph.number_of_nodes()
+        and mapped_subgraphs[0].number_of_edges() == abstract_graph.base_graph.number_of_edges()
     ):
         return random_part(abstract_graph, n_samples=n_samples)
 
     rng = random.Random(seed)
-    nodes = list(abstract_graph.image_graph.nodes())
+    nodes = list(abstract_graph.interpretation_graph.nodes())
 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -4231,21 +4231,20 @@ def filter_by_sampling(
     old_to_new = {}
 
     for old_id in sampled:
-        data = abstract_graph.image_graph.nodes[old_id]
-        assoc = data.get("association")
-        if assoc is None:
+        data = abstract_graph.interpretation_graph.nodes[old_id]
+        mapped_subgraph = get_mapped_subgraph(data)
+        if mapped_subgraph is None:
             continue
         meta = dict(data.get("meta", {}))
-        new_id = out_abstract_graph._add_image_node(association=assoc.copy(), meta=meta)
+        new_id = out_abstract_graph._add_interpretation_node(mapped_subgraph=mapped_subgraph.copy(), meta=meta)
         for attr_name in ("label", "attribute"):
             if attr_name in data:
-                out_abstract_graph.image_graph.nodes[new_id][attr_name] = data[attr_name]
+                out_abstract_graph.interpretation_graph.nodes[new_id][attr_name] = data[attr_name]
         old_to_new[old_id] = new_id
 
-    # Preserve image-graph edges between retained nodes
-    for u, v, edata in abstract_graph.image_graph.edges(data=True):
+    for u, v, edata in abstract_graph.interpretation_graph.edges(data=True):
         if u in old_to_new and v in old_to_new:
-            out_abstract_graph.image_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
+            out_abstract_graph.interpretation_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
 
     return out_abstract_graph
 
@@ -4330,13 +4329,13 @@ def filter_by_node_label(
     cannot_have_any_in = [] if cannot_have_any_in is None else cannot_have_any_in
     
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         if len(must_have_one_of) > 0:
             must_conditions_are_met = False
             for u in subgraph.nodes(): 
@@ -4356,7 +4355,7 @@ def filter_by_node_label(
             cannot_conditions_are_met = True
 
         if must_conditions_are_met and cannot_conditions_are_met:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(subgraph.nodes())
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
     
     return out_abstract_graph
 
@@ -4436,13 +4435,13 @@ def filter_by_edge_label(
     cannot_have_any_in = [] if cannot_have_any_in is None else cannot_have_any_in
 
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
     )
 
-    for subgraph in abstract_graph.get_image_nodes_associations():
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         # must-have check
         if len(must_have_one_of) > 0:
             must_ok = False
@@ -4464,7 +4463,7 @@ def filter_by_edge_label(
             cannot_ok = True
 
         if must_ok and cannot_ok:
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(subgraph.nodes())
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
 
     return out_abstract_graph
 #--------------------------------------------------------------------------------    
@@ -4474,7 +4473,7 @@ def select_top_by_feature_ranking(
     ranked_features,
     max_num: int = 1,
 ) -> 'AbstractGraph':
-    """Select top-K image nodes based on an external feature-importance ranking.
+    """Select top-K interpretation nodes based on an external feature-importance ranking.
     Summary
         Given an ordered list of feature IDs (most important first), rank all
         current image nodes by their label and retain only the top `max_num`.
@@ -4511,8 +4510,8 @@ def select_top_by_feature_ranking(
         score_map = {lbl: (n - i) for i, lbl in enumerate(ranked_features)}
 
     # Gather candidates with scores.
-    candidates = []  # (score, node_id, association, meta)
-    for node_id, data in abstract_graph.image_graph.nodes(data=True):
+    candidates = []  # (score, node_id, mapped_subgraph, meta)
+    for node_id, data in abstract_graph.interpretation_graph.nodes(data=True):
         label = data.get('label', None)
         if label is None and getattr(abstract_graph, 'label_function', None) is not None:
             try:
@@ -4524,7 +4523,7 @@ def select_top_by_feature_ranking(
         score = score_map.get(label, float('-inf'))
         if score == float('-inf'):
             continue  # skip labels not present in the ranking
-        assoc = data.get('association')
+        assoc = get_mapped_subgraph(data)
         meta = data.get('meta')
         candidates.append((score, node_id, assoc, meta))
 
@@ -4534,7 +4533,7 @@ def select_top_by_feature_ranking(
 
     # Construct the output AbstractGraph with selected associations.
     out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.preimage_graph,
+        graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
         attribute_function=abstract_graph.attribute_function,
         edge_function=abstract_graph.edge_function,
@@ -4543,7 +4542,7 @@ def select_top_by_feature_ranking(
     for _, _, assoc, meta in selected:
         if assoc is not None:
             # Preserve metadata if available
-            out_abstract_graph.create_image_node_with_subgraph_from_subgraph(assoc.copy(), meta=meta)
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_subgraph(assoc.copy(), meta=meta)
 
     return out_abstract_graph
 
@@ -4596,7 +4595,7 @@ def binary_combination(
     second_abstract_graph: 'AbstractGraph',
     distance=(0,1)
     ) -> 'AbstractGraph':
-    """Emit image nodes by pairing subgraphs from two AGs when their inter-distance is within bounds.
+    """Emit interpretation nodes by pairing subgraphs from two AGs when their inter-distance is within bounds.
     Summary
         Take one associated subgraph from the first AbstractGraph and one from the second; if the
         shortest-path distance between them (in the shared preimage graph) lies within `distance`,
@@ -4667,20 +4666,20 @@ def binary_combination(
     """
     distance = value_to_2tuple(distance)
     out_abstract_graph = AbstractGraph(
-        graph=first_abstract_graph.preimage_graph,
+        graph=first_abstract_graph.base_graph,
         label_function=first_abstract_graph.label_function,
         attribute_function=first_abstract_graph.attribute_function,
         edge_function=first_abstract_graph.edge_function,
     )
 
     components = binary_combination_decomposition_function(
-        first_abstract_graph.get_image_nodes_associations(),
-        second_abstract_graph.get_image_nodes_associations(),
-        first_abstract_graph.preimage_graph,
+        first_abstract_graph.get_interpretation_nodes_mapped_subgraphs(),
+        second_abstract_graph.get_interpretation_nodes_mapped_subgraphs(),
+        first_abstract_graph.base_graph,
         distance=distance
     )
     for component in components:
-        out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
             component,
             meta=build_meta_from_function_context()
         )
@@ -4695,7 +4694,7 @@ def binary_intersection(
     node_size=None,
     must_be_connected: bool = True
 ) -> 'AbstractGraph':
-    """Emit image nodes for intersections between subgraphs from two AbstractGraphs.
+    """Emit interpretation nodes for intersections between subgraphs from two AbstractGraphs.
     Summary
         For each pair consisting of one associated subgraph from the first AbstractGraph
         and one from the second, compute the intersection of their node sets. If the
@@ -4749,14 +4748,14 @@ def binary_intersection(
         node_size = value_to_2tuple(node_size)
 
     out_abstract_graph = AbstractGraph(
-        graph=first_abstract_graph.preimage_graph,
+        graph=first_abstract_graph.base_graph,
         label_function=first_abstract_graph.label_function,
         attribute_function=first_abstract_graph.attribute_function,
         edge_function=first_abstract_graph.edge_function,
     )
 
-    subgraphs1 = first_abstract_graph.get_image_nodes_associations()
-    subgraphs2 = second_abstract_graph.get_image_nodes_associations()
+    subgraphs1 = first_abstract_graph.get_interpretation_nodes_mapped_subgraphs()
+    subgraphs2 = second_abstract_graph.get_interpretation_nodes_mapped_subgraphs()
 
     # Deduplicate identical intersections across different pairs
     seen = set()  # set[frozenset]
@@ -4779,7 +4778,7 @@ def binary_intersection(
             if must_be_connected:
                 if inter_len == 0:
                     continue
-                induced = first_abstract_graph.preimage_graph.subgraph(inter_nodes)
+                induced = first_abstract_graph.base_graph.subgraph(inter_nodes)
                 try:
                     cc_count = len(list(nx.connected_components(induced)))
                 except Exception:
@@ -4792,7 +4791,7 @@ def binary_intersection(
                 continue
             seen.add(key)
 
-            out_abstract_graph.create_image_node_with_subgraph_from_nodes(
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 inter_nodes,
                 meta=build_meta_from_function_context()
             )
@@ -4800,14 +4799,14 @@ def binary_intersection(
     return out_abstract_graph
 
 #====================================================================================================
-# PRE-IMAGE GRAPH OPERATORS
+# BASE GRAPH OPERATORS
 #====================================================================================================
 @curry
 def unlabel(
     abstract_graph: 'AbstractGraph', 
     label='-'
     ) -> 'AbstractGraph':
-    """Replace all node and edge labels in the preimage graph with a constant.
+    """Replace all node and edge labels in the base graph with a constant.
     Summary
         Before overwriting, copy the current 'label' into 'original_label' on
         both nodes and edges (if not already present). Then reset the 'label'
@@ -4847,7 +4846,7 @@ def unlabel(
         - Only affects 'label' and introduces/preserves 'original_label'.
     """
     out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
-    g = out_abstract_graph.preimage_graph
+    g = out_abstract_graph.base_graph
     # Nodes: preserve original label if not already present, then overwrite label
     for n, data in g.nodes(data=True):
         if 'original_label' not in data:
@@ -4865,7 +4864,7 @@ def prepend_label(
     abstract_graph: 'AbstractGraph', 
     label: Union[str, int] = '-'
 ) -> 'AbstractGraph':
-    """Prepend a string prefix to every node and edge label in the preimage graph.
+    """Prepend a string prefix to every node and edge label in the base graph.
     Summary
         Before modification, copy the current 'label' into 'original_label' on
         both nodes and edges (if not already present). Then modify the 'label'
@@ -4912,7 +4911,7 @@ def prepend_label(
     out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
 
     # Prepend the label to each node's existing label, preserving original
-    for node, data in out_abstract_graph.preimage_graph.nodes(data=True):
+    for node, data in out_abstract_graph.base_graph.nodes(data=True):
         current_label = data.get('label', '')
         if 'original_label' not in data:
             data['original_label'] = current_label
@@ -4920,7 +4919,7 @@ def prepend_label(
         data['label'] = new_label
 
     # Prepend the label to each edge's existing label, preserving original
-    for u, v, data in out_abstract_graph.preimage_graph.edges(data=True):
+    for u, v, data in out_abstract_graph.base_graph.edges(data=True):
         current_label = data.get('label', '')
         if 'original_label' not in data:
             data['original_label'] = current_label
@@ -4938,7 +4937,7 @@ def restore_label(
 ) -> 'AbstractGraph':
     """Restore labels from 'original_label' for nodes and edges.
     Summary
-        For every node and edge in the preimage graph, if an 'original_label'
+        For every node and edge in the base graph, if an 'original_label'
         attribute exists, copy it back into 'label'. Optionally drop the
         'original_label' attribute after restoration.
 
@@ -4958,7 +4957,7 @@ def restore_label(
         - Memory: O(1) extra beyond the graph copy.
     """
     out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
-    g = out_abstract_graph.preimage_graph
+    g = out_abstract_graph.base_graph
     # Nodes
     for n, data in g.nodes(data=True):
         if 'original_label' in data:
@@ -4984,21 +4983,21 @@ def restore_label(
     return out_abstract_graph
 
 #====================================================================================================
-# IMAGE GRAPH META OPERATORS
+# INTERPRETATION GRAPH META OPERATORS
 #====================================================================================================
 def name(text: str = "default"):
     """
-    Build an operator that attaches a user-defined name to each image node.
+    Build an operator that attaches a user-defined name to each interpretation node.
 
     Args:
-        text: Name string to store in meta["user_name"] for each image node.
+        text: Name string to store in meta["user_name"] for each interpretation node.
 
     Returns:
-        Callable[[AbstractGraph], AbstractGraph]: Operator tagging image-node metadata.
+        Callable[[AbstractGraph], AbstractGraph]: Operator tagging interpretation-node metadata.
     """
     def composed(abstract_graph: 'AbstractGraph') -> 'AbstractGraph':
         out_abstract_graph = AbstractGraph(abstract_graph=abstract_graph)
-        for _, data in out_abstract_graph.image_graph.nodes(data=True):
+        for _, data in out_abstract_graph.interpretation_graph.nodes(data=True):
             meta = data.get("meta")
             if not isinstance(meta, dict):
                 meta = {}
@@ -5021,16 +5020,25 @@ def number_of_image_graph_nodes(
 ) -> int:
     """Count the number of image nodes.
     Summary
-        Return the total number of nodes in the image_graph of the AbstractGraph.
+        Return the total number of nodes in the interpretation graph of the AbstractGraph.
 
     Parameters
         abstract_graph : AbstractGraph
             The input graph.
 
     Returns
-        int : number of image nodes.
+        int : number of interpretation nodes.
     """
-    return abstract_graph.image_graph.number_of_nodes()
+    return abstract_graph.interpretation_graph.number_of_nodes()
+
+
+@curry
+def number_of_interpretation_graph_nodes(
+    abstract_graph: 'AbstractGraph',
+    param=None
+) -> int:
+    """Count the number of interpretation nodes."""
+    return abstract_graph.interpretation_graph.number_of_nodes()
 
 
 def number_of_image_graph_edges(
@@ -5039,16 +5047,24 @@ def number_of_image_graph_edges(
 ) -> int:
     """Count the number of image edges.
     Summary
-        Return the total number of edges in the image_graph of the AbstractGraph.
+        Return the total number of edges in the interpretation graph of the AbstractGraph.
 
     Parameters
         abstract_graph : AbstractGraph
             The input graph.
 
     Returns
-        int : number of image edges.
+        int : number of interpretation edges.
     """
-    return abstract_graph.image_graph.number_of_edges()
+    return abstract_graph.interpretation_graph.number_of_edges()
+
+
+def number_of_interpretation_graph_edges(
+    abstract_graph: 'AbstractGraph',
+    param=None
+) -> int:
+    """Count the number of interpretation edges."""
+    return abstract_graph.interpretation_graph.number_of_edges()
 
 
 def quantile_number_of_subgraph_nodes(
@@ -5067,7 +5083,10 @@ def quantile_number_of_subgraph_nodes(
     Returns
         float : q-th quantile of subgraph node counts.
     """
-    return np.quantile([subgraph.number_of_nodes() for subgraph in abstract_graph.get_image_nodes_associations()], q)
+    return np.quantile(
+        [subgraph.number_of_nodes() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()],
+        q,
+    )
 
 
 def quantile_number_of_subgraph_edges(
@@ -5086,7 +5105,10 @@ def quantile_number_of_subgraph_edges(
     Returns
         float : q-th quantile of subgraph edge counts.
     """
-    return np.quantile([subgraph.number_of_edges() for subgraph in abstract_graph.get_image_nodes_associations()], q)
+    return np.quantile(
+        [subgraph.number_of_edges() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()],
+        q,
+    )
 
 
 def max_number_of_subgraph_nodes(
@@ -5100,7 +5122,7 @@ def max_number_of_subgraph_nodes(
     Returns
         int : maximum node count across subgraphs.
     """
-    return max([subgraph.number_of_nodes() for subgraph in abstract_graph.get_image_nodes_associations()])
+    return max([subgraph.number_of_nodes() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()])
 
 
 def min_number_of_subgraph_nodes(
@@ -5114,7 +5136,7 @@ def min_number_of_subgraph_nodes(
     Returns
         int : minimum node count across subgraphs.
     """
-    return min([subgraph.number_of_nodes() for subgraph in abstract_graph.get_image_nodes_associations()])
+    return min([subgraph.number_of_nodes() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()])
 
 
 def max_number_of_subgraph_edges(
@@ -5128,7 +5150,7 @@ def max_number_of_subgraph_edges(
     Returns
         int : maximum edge count across subgraphs.
     """
-    return max([subgraph.number_of_edges() for subgraph in abstract_graph.get_image_nodes_associations()])
+    return max([subgraph.number_of_edges() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()])
 
 
 def min_number_of_subgraph_edges(
@@ -5142,7 +5164,7 @@ def min_number_of_subgraph_edges(
     Returns
         int : minimum edge count across subgraphs.
     """
-    return min([subgraph.number_of_edges() for subgraph in abstract_graph.get_image_nodes_associations()])
+    return min([subgraph.number_of_edges() for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs()])
 
 #====================================================================================================
 # XML REGISTRATION

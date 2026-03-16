@@ -18,7 +18,7 @@ operator pipeline, wrap them with:
 ```python
 from abstractgraph.graphs import AbstractGraph
 
-ag = AbstractGraph(graph=preimage_graph)
+ag = AbstractGraph(graph=base_graph)
 ```
 
 ## Main classes
@@ -36,7 +36,7 @@ ag = AbstractGraph(graph=preimage_graph)
 - `abstractgraph-ml`
   can consume graphs or derived features downstream
 - `abstractgraph-generative`
-  may consume the produced graphs as preimages for later decomposition
+  may consume the produced graphs as base graphs for later decomposition
 
 ## Minimal usage
 
@@ -66,7 +66,7 @@ Graph attributes include:
 
 Use the preprocessor when:
 - your raw inputs are token or sequence embeddings
-- you want a learned preimage graph before any symbolic decomposition
+- you want a learned base graph before any symbolic decomposition
 - you want to inspect induced local structure before moving into the core
   operator/vectorizer stack
 

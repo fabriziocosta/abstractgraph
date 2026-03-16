@@ -1,7 +1,7 @@
 # Operators in `abstractgraph`
 
 Operators are the main mechanism for turning a base graph into a structured set
-of associated subgraphs.
+of mapped subgraphs.
 
 In the standalone `abstractgraph` package they live in:
 - `abstractgraph.operators`
@@ -12,16 +12,16 @@ workflows.
 
 ## Core idea
 
-An operator reads the current image-node associations and emits a new
-`AbstractGraph` whose image graph contains transformed or newly decomposed
-associations.
+An operator reads the current interpretation-node mapped subgraphs and emits a
+new `AbstractGraph` whose interpretation graph contains transformed or newly
+decomposed mapped subgraphs.
 
 Examples:
-- `node()`: singleton-node associations
-- `edge()`: 2-node edge associations
-- `neighborhood(radius=...)`: ego-graph associations
-- `cycle()`: cycle associations
-- `clique(number_of_nodes=...)`: clique associations
+- `node()`: singleton-node mapped subgraphs
+- `edge()`: 2-node edge mapped subgraphs
+- `neighborhood(radius=...)`: ego-graph mapped subgraphs
+- `cycle()`: cycle mapped subgraphs
+- `clique(number_of_nodes=...)`: clique mapped subgraphs
 - `path(number_of_edges=...)`: bounded simple paths
 
 ## Composition helpers
@@ -85,6 +85,6 @@ xml_text = operator_to_xml_string(df, pretty=True)
 - `abstractgraph-ml`
   uses operators to define feature vocabularies
 - `abstractgraph-generative`
-  uses operators to define image-node structure for rewriting and generation
+  uses operators to define interpretation-node structure for rewriting and generation
 
 For the conceptual background behind these choices, see [WHITE_PAPER.md](WHITE_PAPER.md).

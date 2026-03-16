@@ -511,10 +511,10 @@ def display(
     """
     Visualizes the full nested structure of a AbstractGraph using display_graph.
 
-    The leftmost level is the base (preimage) graph and the abstract level
-    (image_graph) is drawn in an additional column to the right.
-    Connection lines are drawn between a node in the abstract graph and every base node
-    (from the preimage graph) that appears in its associated subgraph.
+    The leftmost level is the base graph and the abstract level
+    (interpretation_graph) is drawn in an additional column to the right.
+    Connection lines are drawn between an interpretation node and every base node
+    that appears in its mapped subgraph.
 
     Node colors are assigned consistently based on their numerical labels or stable hash.
 
@@ -570,14 +570,14 @@ def display(
 
     # --- Calculate Layouts ---
     # Calculate base positions. Handle empty graph.
-    if abstract_graph.preimage_graph.number_of_nodes() > 0:
-        pos_base = _packed_kamada_kawai_layout(abstract_graph.preimage_graph)
+    if abstract_graph.base_graph.number_of_nodes() > 0:
+        pos_base = _packed_kamada_kawai_layout(abstract_graph.base_graph)
     else:
         pos_base = {}
 
     # Calculate abstract positions. Handle empty graph.
-    if abstract_graph.image_graph.number_of_nodes() > 0:
-        pos_abstract = _packed_kamada_kawai_layout(abstract_graph.image_graph)
+    if abstract_graph.interpretation_graph.number_of_nodes() > 0:
+        pos_abstract = _packed_kamada_kawai_layout(abstract_graph.interpretation_graph)
     else:
         pos_abstract = {}
 
@@ -618,7 +618,7 @@ def display(
     # --- Draw Graphs using Helper ---
     # Draw the base graph (no offset)
     ax = display_graph(
-        abstract_graph.preimage_graph,
+        abstract_graph.base_graph,
         ax=ax,
         style=base_style,
         pos=pos_base,
@@ -628,14 +628,14 @@ def display(
 
     # Draw the abstract graph (with x_offset)
     abstract_edgecolors = []
-    for _node, data in abstract_graph.image_graph.nodes(data=True):
-        assoc = data.get("association")
-        if isinstance(assoc, nx.Graph) and assoc.number_of_nodes() > 0:
+    for _node, data in abstract_graph.interpretation_graph.nodes(data=True):
+        mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
+        if isinstance(mapped_subgraph, nx.Graph) and mapped_subgraph.number_of_nodes() > 0:
             abstract_edgecolors.append("black")
         else:
             abstract_edgecolors.append("white")
     ax = display_graph(
-        abstract_graph.image_graph,
+        abstract_graph.interpretation_graph,
         ax=ax,
         style={**abstract_style, "node_edgecolors": abstract_edgecolors},
         pos=pos_abstract, # Pass original positions
@@ -647,8 +647,8 @@ def display(
     # Need the final, offsetted positions for the abstract graph for connections
     final_pos_abstract = {node: (x + x_offset, y) for node, (x, y) in pos_abstract.items()}
 
-    for anode, adata in abstract_graph.image_graph.nodes(data=True):
-        subg = adata.get("association")
+    for anode, adata in abstract_graph.interpretation_graph.nodes(data=True):
+        subg = adata.get("mapped_subgraph", adata.get("association"))
         if subg is None:
             continue
         # Ensure qnode exists in the final positions (handles empty abstract graph case)
@@ -670,7 +670,7 @@ def display(
                     zorder=-1 # Draw connections behind nodes
                 )
 
-    # Fit one combined viewport so both preimage and image graphs remain visible.
+    # Fit one combined viewport so both base and interpretation graphs remain visible.
     combined_pos = {
         ("base", node): coords for node, coords in pos_base.items()
     }
@@ -833,8 +833,8 @@ def display_mappings(
     """
     Visualize mapping instances grouped by image-node label.
 
-    All associated preimage subgraphs are rendered (one instance per cell), grouped by
-    image-node label and sorted by descending group frequency. Each label group receives
+    All mapped base subgraphs are rendered (one instance per cell), grouped by
+    interpretation-node label and sorted by descending group frequency. Each label group receives
     a single title and a thin black frame around its full instance array. If a label
     group wraps to the next row, the frame remains open at the end of the previous row
     and the beginning of the continuation row.
@@ -855,7 +855,7 @@ def display_mappings(
     Returns:
         None.
     """
-    if abstract_graph is None or abstract_graph.image_graph is None or len(abstract_graph.image_graph.nodes) == 0:
+    if abstract_graph is None or abstract_graph.interpretation_graph is None or len(abstract_graph.interpretation_graph.nodes) == 0:
         print("[display_mappings] Empty abstract graph — nothing to display.")
         return
 
@@ -873,18 +873,18 @@ def display_mappings(
     else:
         subgraph_style.setdefault('cmap', 'hsv')
     
-    # Group image nodes by their existing image-node label. Within each label
+    # Group interpretation nodes by their existing label. Within each label
     # group, use a 19-bit graph hash to distinguish true isomorphic copies.
     mapping_dict: Dict[Any, Dict[int, List[nx.Graph]]] = {}
-    for node, data in abstract_graph.image_graph.nodes(data=True):
-        association = data.get("association")
-        if association is None:
+    for node, data in abstract_graph.interpretation_graph.nodes(data=True):
+        mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
+        if mapped_subgraph is None:
             continue
         label = data.get("label")
         if label is None:
             label = stable_hash(str(node))
-        iso_hash = hash_graph(association, nbits=19)
-        mapping_dict.setdefault(label, {}).setdefault(iso_hash, []).append(association)
+        iso_hash = hash_graph(mapped_subgraph, nbits=19)
+        mapping_dict.setdefault(label, {}).setdefault(iso_hash, []).append(mapped_subgraph)
 
     # Sort label groups by total frequency descending. Within each label group,
     # collapse exact copies into one displayed cell with a multiplicity marker.

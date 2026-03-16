@@ -5,7 +5,7 @@ from __future__ import annotations
 import matplotlib
 import networkx as nx
 
-from abstractgraph import operators as ops
+import abstractgraph.operators as ops
 from abstractgraph.graphs import AbstractGraph
 from abstractgraph.vectorize import vectorize
 
@@ -20,7 +20,7 @@ def main() -> None:
         graph.nodes[node]["attribute"] = [1]
 
     abstract_graph = AbstractGraph(graph=graph)
-    abstract_graph.create_default_image_node()
+    abstract_graph.create_default_interpretation_node()
     abstract_graph = ops.node()(abstract_graph)
     abstract_graph.update()
     matrix = vectorize(abstract_graph, nbits=8, return_dense=True)
