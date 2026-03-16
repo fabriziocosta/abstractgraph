@@ -1,4 +1,4 @@
-# Guiding Graph Learning with Interpretable Substructure Encodings
+# Structural Programs as Explanations
 
 This document is the conceptual background for the standalone `abstractgraph`
 core package and the split ecosystem around it.
@@ -9,345 +9,436 @@ Package mapping:
 - `abstractgraph-generative`: rewriting and generation on top of those
   representations
 
-## Executive Summary
+## Abstract
 
-Modern machine learning models can be accurate but remain difficult to inspect, debug, and correct at the mechanism level. This white paper introduces **Abstract Graphs** as a mechanistic intermediate representation (IR): a representation layer between raw structured data and predictive models where each variable corresponds to an explicit, inspectable subgraph predicate.
+Interpretability in machine learning is often pursued either by restricting
+models to use a small number of features or by approximating complex models
+with simpler surrogates after training. Both strategies are constrained by a
+fundamental tension between expressiveness and interpretability.
 
-Rather than relying only on latent parameters, Abstract Graphs provide stable, composable, human-meaningful entities that support diagnosis, intervention, and iterative refinement.
+This white paper proposes a different perspective for graph learning.
+Explanations should not be understood primarily as feature weights. They
+should be understood as structural programs that generate interpretable
+components of the input graph.
+
+The framework is organized around three ideas:
+
+- a calculus of structural interpretations of a graph
+- a lattice of graph interpretations
+- a counting-measure embedding that connects structural interpretations to
+  machine learning vectors
+
+The key claim is that interpretability arises from structural transparency and
+local predictive sparsity. The global feature space may be large, but a single
+prediction can often be explained by a small number of generated subgraphs
+with explicit derivations. Those subgraphs form structural explanations that
+can be inspected directly in the input graph.
 
 ## Table of Contents
 
-1. [Motivation: Why Machine Learning Needs an Abstraction Layer](#1-motivation-why-machine-learning-needs-an-abstraction-layer)
-2. [Definition of an Abstract Graph](#2-definition-of-an-abstract-graph)
-3. [What the Abstract Graph Represents](#3-what-the-abstract-graph-represents)
-4. [Pharmacophore Example (Chemoinformatics)](#4-pharmacophore-example-chemoinformatics)
-5. [Relation to Existing Molecular Descriptors](#5-relation-to-existing-molecular-descriptors)
-6. [Abstraction in Computer Science](#6-abstraction-in-computer-science)
-7. [Causal Abstraction](#7-causal-abstraction)
-8. [Category-Theoretic Interpretation](#8-category-theoretic-interpretation)
-9. [Information-Theoretic Interpretation](#9-information-theoretic-interpretation)
-10. [Learning as Search Over Vocabularies](#10-learning-as-search-over-vocabularies)
-11. [Human Reasoning and Compositionality](#11-human-reasoning-and-compositionality)
-12. [Model Selection Criteria](#12-model-selection-criteria)
-13. [Conceptual Interpretation](#13-conceptual-interpretation)
-14. [Central Research Question](#14-central-research-question)
+1. [Introduction](#1-introduction)
+2. [Structural Interpretations of Graphs](#2-structural-interpretations-of-graphs)
+3. [A Calculus of Structural Interpretations](#3-a-calculus-of-structural-interpretations)
+4. [The Lattice of Graph Interpretations](#4-the-lattice-of-graph-interpretations)
+5. [Counting-Measure Embedding](#5-counting-measure-embedding)
+6. [Structural Programs as Feature Generators](#6-structural-programs-as-feature-generators)
+7. [A New Notion of Interpretability](#7-a-new-notion-of-interpretability)
+8. [Structural Programs as Explanations](#8-structural-programs-as-explanations)
+9. [Advantages](#9-advantages)
+10. [Supporting Perspectives](#10-supporting-perspectives)
+11. [Conclusion](#11-conclusion)
 
-## 1. Motivation: Why Machine Learning Needs an Abstraction Layer
+## 1. Introduction
 
-Modern machine learning models are effective predictors but poor scientific objects.
-They produce outputs, yet they do not expose mechanisms.
+Graph representations appear in many scientific and engineering domains,
+including molecular modeling, biological networks, program analysis, and
+social systems. Machine learning on graphs must balance two goals:
 
-Typical workflow:
+- capturing complex structural patterns
+- providing explanations that humans can understand
 
-1. Train model
-2. Evaluate performance
-3. Observe failures
-4. Retrain
+Existing approaches to interpretability usually follow one of two strategies.
+One strategy restricts the model to a small set of features so the entire
+model remains understandable. Another trains a complex model and later tries
+to explain its behavior through a post-hoc surrogate or attribution method.
 
-The missing step is:
+Both strategies are shaped by the same assumption:
 
-> Diagnose why the model failed.
+> interpretability requires a globally small feature space
 
-The core difficulty is structural:
+That assumption is too strong. It reflects human cognitive limits more than it
+reflects the structure of the data.
 
-- Neural networks represent knowledge as distributed parameters.
-- Latent variables are not stable referents.
-- A user cannot intervene locally.
+This paper proposes a different view. We allow the global structural feature
+space to be large, but require explanations to be sparse at the instance
+level. An individual prediction should be explainable through a small set of
+structurally meaningful components of the input graph.
 
-Representation learning explicitly aims to discover useful features automatically, but these features are internal and uninterpretable.
+Those components are not taken as primitive features. They are generated by
+explicit operators acting on graph interpretations. In this sense,
+interpretability comes from structural programs and their outputs, not from a
+globally tiny vocabulary.
 
-Reference:
-Bengio, Courville, Vincent (2013), Representation Learning.
-https://arxiv.org/abs/1206.5538
+## 2. Structural Interpretations of Graphs
 
-The problem is therefore not accuracy.
-
-It is lack of operational interface.
-
-A human cannot:
-
-- Inspect a concept.
-- Alter a concept.
-- Test a hypothesis about the model.
-
-The proposal behind Abstract Graphs is:
-
-> Machine learning needs an intermediate representation that exposes mechanisms rather than parameters.
-
-## 2. Definition of an Abstract Graph
-
-An **Abstract Graph** consists of two related structures.
-
-### Pre-image Graph (G)
-
-The concrete system, for example:
-
-- Molecule
-- Sentence
-- Biological network
-- Relational database
-
-### Image Graph (H)
-
-A graph whose nodes represent **subgraph predicates of G**.
-
-Formally:
+Let
 
 $$
-\pi : \mathcal{P}(G) \rightarrow V(H)
+G = (V, E)
 $$
 
-where $\mathcal{P}(G)$ is a selected family of subgraphs.
+be a base graph.
 
-A node in $H$ corresponds to a pattern in $G$, not an element.
+A structural interpretation of $G$ specifies:
+
+- a family of base subgraphs
+  $$
+  S = \{S_1, \dots, S_n\}
+  $$
+- a graph over the interpreted structures, with interpretation nodes
+  corresponding to members of $S$
+- interpretation edges encoding relations among those interpreted structures
+
+Write the interpretation graph as
+
+$$
+I = (U, E_I)
+$$
+
+where each node in $U$ corresponds to a selected base subgraph in $S$ and each
+edge in $E_I$ represents a relation between interpretation nodes.
+
+The resulting Abstract Graph is the pair
+
+$$
+A = (G, I)
+$$
+
+consisting of the base graph together with one of its interpretation graphs.
+
+This distinction is essential:
+
+- the base graph is the original object of study
+- the interpretation graph is a structured view over selected base subgraphs
+- the Abstract Graph is the combined object containing both
+
+The interpretation graph is not required to be smaller than the base graph. It
+can be larger when hidden relational structure is made explicit.
+
+### Example
+
+In a molecular graph, one interpretation node may represent a hydrogen-bond
+donor neighborhood, while another may represent an aromatic ring. An
+interpretation edge may record that the two interpreted structures are linked
+by a bounded path in the base graph.
+
+The explanatory object is therefore not an atom or bond in isolation. It is a
+structural component of the base graph as represented in the interpretation
+graph.
+
+## 3. A Calculus of Structural Interpretations
+
+The framework assumes a family of operators
+
+$$
+O : A \rightarrow A
+$$
+
+that act on Abstract Graphs.
+
+Operationally, these operators transform the interpretation graph while
+remaining grounded in the same base graph unless the operator explicitly says
+otherwise. An operator can inspect:
+
+- the base graph
+- the current set of interpreted base subgraphs
+- the relations already present in the interpretation graph
+
+Typical operators include:
+
+- splitting a coarse interpreted structure into finer substructures
+- merging several interpreted structures into a larger component
+- generating pairwise or higher-order relational structures
+- connecting interpretation nodes based on properties of the base graph
+- extending a local structure through paths, neighborhoods, or motifs
+
+Because operators map Abstract Graphs to Abstract Graphs, they can be
+composed. A structural program is therefore a sequence
+
+$$
+A_k = O_k(O_{k-1}(\dots O_1(A_0)))
+$$
+
+where $A_0 = (G, I_0)$ is an initial interpretation of the base graph.
+
+This operator system is the calculus of structural interpretations of a graph.
+Complex explanatory structures emerge from compositions of simple, explicit
+transformations.
+
+Each interpretation node can also carry a derivation trace indicating which
+operator sequence generated it. That trace is a key ingredient of explanation,
+because it tells us not only what subgraph matters but how it was constructed.
+
+## 4. The Lattice of Graph Interpretations
+
+Different interpretation graphs over the same base graph correspond to
+different ways of viewing the same underlying structure.
+
+Some interpretations are coarser. Others are finer. If one interpretation
+subdivides interpreted structures present in another, it is a refinement of
+that interpretation.
+
+Let $I_1$ and $I_2$ be interpretation graphs over the same base graph $G$. We
+say that $I_2$ is finer than $I_1$ when the interpreted structures in $I_2$
+resolve the structures in $I_1$ into more detailed components.
+
+This induces a partial order on interpretations of a fixed base graph. The
+space of interpretations can therefore be treated as a lattice of graph
+interpretations:
+
+- moving upward corresponds to coarsening
+- moving downward corresponds to refinement
+- operator programs define paths through this space
+
+This matters because explanation is not tied to one privileged scale. A good
+structural program can move through levels of granularity until it reaches the
+structures that are both predictive and interpretable.
+
+The lattice perspective also clarifies that learning is not just parameter
+fitting. It is often a search over useful interpretations of the same base
+graph.
+
+## 5. Counting-Measure Embedding
+
+To connect structural interpretations to machine learning models, we embed
+generated interpreted structures into a vector space.
+
+Suppose the interpretation graph contains a set of interpreted structures
+
+$$
+S = \{S_1, \dots, S_n\}
+$$
+
+derived from the base graph. Let
+
+$$
+h : S \rightarrow \{0, \dots, M - 1\}
+$$
+
+be a hash or identifier map over those structures.
+
+Define the counting measure
+
+$$
+x_k = |\{S_i \in S \mid h(S_i) = k\}|
+$$
+
+for each coordinate $k$. The resulting vector
+
+$$
+x = (x_0, \dots, x_{M-1})
+$$
+
+records how many interpreted structures fall into each identifier bucket.
+
+This embedding is the bridge to standard machine learning:
+
+- linear models can act on count vectors
+- sparse models can select a small number of active coordinates
+- other estimators can use the same structural representation as input
+
+The important point is that explainability does not reside in the hash bucket
+by itself. It resides in the interpreted structures and operator traces that
+gave rise to the counted coordinates.
+
+## 6. Structural Programs as Feature Generators
+
+Every operator in the calculus generates, refines, or relates interpreted
+structures. A structural program therefore acts as a feature-generation
+pipeline.
 
 Examples:
 
-- Neighborhood of radius 1
-- Two neighborhoods at bounded distance
-- Node participating in aromatic cycle
-- Relational event in a story
+- neighborhood operators generate local contexts
+- pair operators generate relational patterns between interpreted structures
+- path operators generate connectivity patterns
+- merge operators generate larger motifs from smaller units
 
-### Important Property
+The counting-measure embedding turns the outputs of those programs into
+feature vectors, but the semantic content remains structural.
 
-The image graph is not necessarily a simplification.
+In this view, a feature is not an arbitrary coordinate invented by the model.
+It is the counted footprint of a generated structural object within an
+interpretation graph over a base graph.
 
-$$
-|V(H)| \geq |V(G)|
-$$
+This perspective also explains why the global feature space can be very large
+without destroying interpretability. The model may have access to many
+possible generated structures, while any given instance activates only a
+restricted subset.
 
-The image graph can be larger because it makes hidden relational structure explicit.
+## 7. A New Notion of Interpretability
 
-## 3. What the Abstract Graph Represents
+The framework suggests a different standard for interpretability.
 
-The Abstract Graph is a **space of observables**.
+Interpretability should not be defined by forcing the entire model to use only
+a tiny global vocabulary. Instead, it should be defined by structural
+transparency and local predictive sparsity.
 
-Instead of describing a system by its parts, we describe it by the patterns detectable within it.
-
-| Description Type | Example |
-| --- | --- |
-| Object-based | Atom A |
-| Relational | Atom A hydrogen-bonds with ring B |
-
-Humans reason in relational descriptions, not raw states.
-
-The Abstract Graph therefore converts:
-
-> structure -> named relational mechanisms
-
-## 4. Pharmacophore Example (Chemoinformatics)
-
-A pharmacophore is a spatial arrangement of features responsible for biological activity.
-
-IUPAC definition:
-https://doi.org/10.1351/goldbook.P04524
-
-Example motif:
-
-- Hydrogen bond donor
-- Five bonds away from aromatic ring
-
-This is naturally expressible as a subgraph predicate over the molecular graph.
-
-In the Abstract Graph, the entire motif becomes a single node.
-
-This node can be:
-
-- Counted
-- Compared
-- Linked to activity
-
-Thus predictive modeling becomes:
+Consider a predictive model operating on the counting-measure embedding:
 
 $$
-\text{bioactivity} = f(\text{mechanisms})
+f(G) = \sum_k w_k x_k
 $$
 
-not
+Even if the ambient feature space is large, an individual prediction is often
+dominated by a small number of active terms. Those active terms correspond to
+specific interpreted structures generated by the operator calculus.
 
-$$
-\text{bioactivity} = f(\text{atoms})
-$$
+An explanation is interpretable when a human can:
 
-## 5. Relation to Existing Molecular Descriptors
+1. identify the few interpreted structures that materially drive the
+   prediction
+2. trace those structures back to explicit subgraphs in the base graph
+3. understand the operator derivations that produced them
 
-### Morgan Fingerprints
+The explanatory burden shifts from listing weights to inspecting a small set
+of generated structural objects.
 
-Enumerate local neighborhoods and hash them into bit vectors.
+## 8. Structural Programs as Explanations
 
-Rogers and Hahn (2010):
-https://doi.org/10.1021/ci100050t
+In this framework, explanations are not merely features. They are structural
+programs together with the particular interpreted structures those programs
+generate on a given input graph.
 
-Limitation:
+For a specific prediction, an explanation may involve:
 
-- Features exist.
-- Meaning is lost.
+- a neighborhood expansion around a motif
+- a connector path between two interpreted subgraphs
+- a higher-order relation constructed from several local components
 
-### Graph Neural Networks
+What makes the explanation understandable is that each predictive structure
+has:
 
-Learn features automatically.
+- a location in the base graph
+- a representation in the interpretation graph
+- a derivation trace through explicit operators
 
-Limitation:
+This gives explanations three desirable properties.
 
-- No symbolic identity.
-- No inspectable mechanism.
+First, they are inspectable. A user can examine the relevant subgraphs
+directly in the original input.
 
-### Abstract Graphs
+Second, they are traceable. A user can see which structural program produced
+the explanation.
 
-Provide:
+Third, they are actionable. If an interpretation is misleading, one can change
+operators or interpretation rules rather than only retraining parameters.
 
-- Explicit predicates
-- Named structures
-- Compositional relations
+### Chemoinformatics Illustration
 
-Key distinction:
+Consider a molecule in which activity depends on a donor group, an aromatic
+ring, and a bounded connector path between them.
 
-| Method | Representation |
-| --- | --- |
-| Fingerprint | Hashed pattern |
-| GNN | Latent vector |
-| Abstract Graph | Interpretable mechanism |
+One structural program may:
 
-## 6. Abstraction in Computer Science
+1. generate donor-centered neighborhoods
+2. generate aromatic-ring structures
+3. connect them when a path constraint is satisfied
 
-Software engineering manages complexity through abstraction barriers.
+The explanation for a prediction is then not a bare coefficient on a hashed
+feature. It is the generated relational motif instantiated in that molecule,
+together with the operator trace that produced it.
 
-Users interact with operations, not implementation.
+## 9. Advantages
 
-Primary reference:
-Abelson and Sussman, Structure and Interpretation of Computer Programs.
-https://web.mit.edu/6.001/6.037/sicp.pdf
+The framework offers several advantages.
 
-Abstract Graph nodes behave similarly.
+### Expressiveness
 
-A node is an interface:
+The structural feature space can grow large because it is generated by
+composable operators over interpretations of the base graph.
 
-> a donor near aromatic ring
+### Traceability
 
-The internal molecular details are hidden.
+Each predictive feature corresponds to interpreted structures with explicit
+locations in the base graph and explicit derivations in the operator calculus.
 
-## 7. Causal Abstraction
+### Instance-Level Explanations
 
-A correct abstraction preserves causal relationships across levels.
+Predictions can often be explained through a small number of active structural
+objects rather than through a global simplification of the whole model.
 
-Beckers and Halpern (2021):
+### Compatibility with Machine Learning
+
+Counting measures convert generated structural interpretations into standard
+feature vectors that can be used by familiar estimators.
+
+### Modifiability
+
+When an explanation is wrong or incomplete, one can revise the interpretation
+operators, the structural vocabulary, or the level of granularity.
+
+## 10. Supporting Perspectives
+
+The main framework does not depend on any single external formalism, but
+several perspectives help clarify its role.
+
+### Causal Abstraction
+
+A useful interpretation should preserve causally relevant structure across
+levels. In this language, the base graph contains lower-level variables while
+the interpretation graph organizes higher-level structural variables. This
+supports local diagnosis because model failure can often be localized to a
+particular interpreted mechanism rather than to an undifferentiated parameter
+field.
+
+Reference:
+Beckers and Halpern (2021)
 https://arxiv.org/abs/2106.02997
 
-Mapping:
+### Category-Theoretic Intuition
 
-| Level | Meaning |
-| --- | --- |
-| Pre-image | Micro-variables |
-| Image graph | Macro-variables |
-
-Therefore model failure becomes localized to a mechanism.
-
-Instead of retraining blindly, one can modify the representation.
-
-## 8. Category-Theoretic Interpretation
-
-The Abstract Graph transforms an object into its observables.
-
-Instead of defining a graph only as nodes and edges, we can treat it as a family of relational patterns appearing in it.
-
-This resembles representing an object by how it behaves under interactions.
+The interpretation graph can be viewed as a structured catalog of observables
+constructed from the base graph. The emphasis is not on isolated graph
+elements but on how relational patterns are exposed and organized under
+explicit transformations.
 
 References:
-Mac Lane, Categories for the Working Mathematician.
+Mac Lane, Categories for the Working Mathematician
 https://www.sas.rochester.edu/mth/sites/doug-ravenel/otherpapers/maclanecat.pdf
 
-Spivak, Seven Sketches in Compositionality.
+Spivak, Seven Sketches in Compositionality
 https://dspivak.net/7Sketches.pdf
 
-Interpretation:
+### Information-Theoretic View
 
-The Abstract Graph is a structured catalog of observable behaviors.
+A good interpretation retains information relevant to the task while imposing a
+useful structural organization on the input. Different base graphs may support
+similar interpreted structures, and those common structures can become the
+stable explanatory units used by learning.
 
-## 9. Information-Theoretic Interpretation
-
-A good abstraction preserves relevant information.
-
-Information Bottleneck principle:
-retain information about target $Y$ while compressing input $X$.
-
-Exposition:
+Reference:
 https://arxiv.org/abs/1503.02406
 
-Abstract Graph nodes correspond to functional equivalence classes of structures.
+## 11. Conclusion
 
-Different graphs that act the same biologically can map to the same abstract pattern.
+This white paper proposes a structural approach to interpretable graph
+learning based on three central ideas:
 
-## 10. Learning as Search Over Vocabularies
+- a calculus of structural interpretations of a graph
+- a lattice of graph interpretations
+- a counting-measure embedding that connects generated structures to machine
+  learning vectors
 
-Traditional ML optimizes parameters.
+The central object is the Abstract Graph, defined as the pair of a base graph
+and an interpretation graph. Operators act on Abstract Graphs by constructing
+and transforming interpretation graphs grounded in explicit base subgraphs.
 
-Abstract Graph learning optimizes concept vocabulary.
+This reframes interpretability. A model need not be globally tiny to be
+understandable. What matters is whether an individual prediction can be
+explained by a small number of structurally meaningful components generated by
+explicit structural programs.
 
-This resembles predicate invention in ILP.
-
-Muggleton (1991):
-https://doi.org/10.1016/0004-3702(91)90035-U
-
-We are discovering what entities exist in the explanatory model.
-
-## 11. Human Reasoning and Compositionality
-
-Humans reason with compositional symbols.
-
-Overview:
-Lake et al. (2017):
-https://doi.org/10.1017/S0140525X16001837
-
-Abstract Graphs provide:
-
-- Stable referents
-- Composable relations
-- Interpretable explanations
-
-## 12. Model Selection Criteria
-
-Two objectives:
-
-### Utility
-
-Predictive performance.
-
-### Simplicity
-
-Short decomposition function.
-
-This mirrors Occam-style generalization control (structural risk minimization; Vapnik).
-
-Interpretation:
-
-We minimize the description length of the explanation.
-
-## 13. Conceptual Interpretation
-
-Abstract Graphs are best understood as a mechanistic intermediate representation for machine learning.
-
-Analogy:
-
-| Computing | Abstract Graphs |
-| --- | --- |
-| Machine code | Pre-image graph |
-| Intermediate representation | Abstract graph |
-| Program reasoning | Human interpretation |
-
-## 14. Central Research Question
-
-The main open question is:
-
-> Which families of subgraph predicates produce stable, causal, human-meaningful mechanisms?
-
-Correct abstraction yields:
-
-- Interpretability
-- Local debugging
-- Guided correction
-
-Incorrect abstraction yields:
-
-- Misleading explanations
-
-Therefore, the framework is a formal method for constructing interpretable variables from structured data.
+The result is a path toward machine learning systems that remain expressive
+while providing explanations that are inspectable, traceable, and grounded in
+the structure of relational data.

@@ -50,6 +50,7 @@ See [ECOSYSTEM.md](ECOSYSTEM.md) for the dependency graph and install order.
 
 - [docs/README.md](docs/README.md)
 - [docs/OPERATORS.md](docs/OPERATORS.md)
+- [docs/VECTORIZATION.md](docs/VECTORIZATION.md)
 - [docs/WHITE_PAPER.md](docs/WHITE_PAPER.md)
 - [ECOSYSTEM.md](ECOSYSTEM.md)
 

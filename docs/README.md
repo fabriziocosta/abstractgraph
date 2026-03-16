@@ -87,6 +87,7 @@ direction.
 ## Related docs
 
 - [OPERATORS.md](OPERATORS.md)
+- [VECTORIZATION.md](VECTORIZATION.md)
 - [WHITE_PAPER.md](WHITE_PAPER.md)
 
 ## Notebook sequence
