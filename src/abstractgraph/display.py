@@ -1393,11 +1393,11 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
     """
     # Mapping from our data_type to Graphviz attributes.
     DATA_TYPE_STYLES = {
-        "global": {"shape": "circle", "fillcolor": "palegreen2"},
-        "value": {"shape": "circle", "fillcolor": "ivory"},
-        "function": {"shape": "rectangle", "fillcolor": "lightskyblue2"},
-        "parameter": {"shape": "oval", "fillcolor": "goldenrod1"},
-        "operator": {"shape": "hexagon", "fillcolor": "lightsteelblue"},
+        "global": {"shape": "circle", "fillcolor": "#98FB98"},
+        "value": {"shape": "circle", "fillcolor": "#FFFFF0"},
+        "function": {"shape": "rectangle", "fillcolor": "#A4D3EE"},
+        "parameter": {"shape": "oval", "fillcolor": "#FFC125"},
+        "operator": {"shape": "hexagon", "fillcolor": "#B0C4DE"},
     }
     
     if isinstance(comp_func_or_graph, nx.DiGraph):
@@ -1405,59 +1405,127 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
     else:
         G = decomposition_to_graph(comp_func_or_graph)
     
-    A = to_agraph(G)
-    
-    for n in A.nodes():
-        node_name = n.get_name()
-        display_label = G.nodes[node_name].get("label", node_name)
-        # Use "data_type" instead of "shape"
-        data_type = G.nodes[node_name].get("data_type", "parameter")
-        style = DATA_TYPE_STYLES.get(data_type, {"shape": "oval", "fillcolor": "grey"})
-        
-        n.attr['shape'] = style["shape"]
-        n.attr['style'] = 'filled'
-        n.attr['fillcolor'] = style["fillcolor"]
-        n.attr['label'] = display_label
-        
-        if data_type == "operator":
-            n.attr['fontsize'] = '14'
-    
-    # Set edge thickness based on the data_type of the tail node.
-    for edge in A.edges():
-        tail = edge[0]
-        head = edge[1]
-        tail_data_type = G.nodes[tail].get("data_type", "parameter")
-        if tail_data_type == "function":
-            if not edge.attr.get("penwidth"):
-                edge.attr["penwidth"] = "3"
-        elif tail_data_type in ("parameter", "value"):
-            if not edge.attr.get("penwidth"):
-                edge.attr["penwidth"] = "1"
+    try:
+        A = to_agraph(G)
+
+        for n in A.nodes():
+            node_name = n.get_name()
+            display_label = G.nodes[node_name].get("label", node_name)
+            # Use "data_type" instead of "shape"
+            data_type = G.nodes[node_name].get("data_type", "parameter")
+            style = DATA_TYPE_STYLES.get(data_type, {"shape": "oval", "fillcolor": "grey"})
+
+            n.attr['shape'] = style["shape"]
+            n.attr['style'] = 'filled'
+            n.attr['fillcolor'] = style["fillcolor"]
+            n.attr['label'] = display_label
+
+            if data_type == "operator":
+                n.attr['fontsize'] = '14'
+
+        # Set edge thickness based on the data_type of the tail node.
+        for edge in A.edges():
+            tail = edge[0]
+            head = edge[1]
+            tail_data_type = G.nodes[tail].get("data_type", "parameter")
+            if tail_data_type == "function":
+                if not edge.attr.get("penwidth"):
+                    edge.attr["penwidth"] = "3"
+            elif tail_data_type in ("parameter", "value"):
+                if not edge.attr.get("penwidth"):
+                    edge.attr["penwidth"] = "1"
+            else:
+                if not edge.attr.get("penwidth"):
+                    edge.attr["penwidth"] = "3"
+            edge_label = G.edges[tail, head].get("label")
+            if edge_label:
+                edge.attr["label"] = edge_label
+                if not edge.attr.get("fontsize"):
+                    edge.attr["fontsize"] = "10"
+
+        A.graph_attr.update(
+            rankdir="BT",
+            nodesep="0.8",
+            ranksep="1.2",
+            splines="true",
+            overlap="false"
+        )
+
+        A.layout(prog="dot")
+        A.draw(output_file)
+
+        if os.path.exists(output_file):
+            img = mpimg.imread(output_file)
+            plt.figure(figsize=figsize)
+            plt.imshow(img)
+            plt.axis("off")
+            plt.show()
         else:
-            if not edge.attr.get("penwidth"):
-                edge.attr["penwidth"] = "3"
-        edge_label = G.edges[tail, head].get("label")
-        if edge_label:
-            edge.attr["label"] = edge_label
-            if not edge.attr.get("fontsize"):
-                edge.attr["fontsize"] = "10"
-    
-    A.graph_attr.update(
-        rankdir="BT",
-        nodesep="0.8",
-        ranksep="1.2",
-        splines="true",
-        overlap="false"
+            print("Error: output file was not created.")
+        return
+    except ImportError:
+        pass
+
+    # Fallback when Graphviz bindings are unavailable: use a layered NetworkX layout.
+    levels = {node: 0 for node in G.nodes}
+    for generation_idx, generation in enumerate(nx.topological_generations(G)):
+        for node in generation:
+            levels[node] = generation_idx
+
+    grouped: Dict[int, List[Any]] = {}
+    for node, level in levels.items():
+        grouped.setdefault(level, []).append(node)
+
+    pos: Dict[Any, Tuple[float, float]] = {}
+    max_width = max((len(nodes) for nodes in grouped.values()), default=1)
+    for level, nodes in grouped.items():
+        ordered_nodes = sorted(nodes, key=str)
+        width = len(ordered_nodes)
+        x_offset = (max_width - width) / 2.0
+        for idx, node in enumerate(ordered_nodes):
+            pos[node] = (x_offset + idx, -level)
+
+    plt.figure(figsize=figsize)
+    ax = plt.gca()
+    ax.set_axis_off()
+
+    node_colors = [
+        DATA_TYPE_STYLES.get(G.nodes[node].get("data_type", "parameter"), {"fillcolor": "grey"})["fillcolor"]
+        for node in G.nodes
+    ]
+    edge_widths = [
+        1.0 if G.nodes[tail].get("data_type", "parameter") in ("parameter", "value") else 2.5
+        for tail, _head in G.edges
+    ]
+    labels = {node: G.nodes[node].get("label", node) for node in G.nodes}
+    edge_labels = {
+        (tail, head): G.edges[tail, head]["label"]
+        for tail, head in G.edges
+        if G.edges[tail, head].get("label")
+    }
+
+    nx.draw_networkx_edges(
+        G,
+        pos,
+        ax=ax,
+        arrows=True,
+        arrowstyle="-|>",
+        arrowsize=16,
+        width=edge_widths,
+        edge_color="#4a5568",
+        connectionstyle="arc3,rad=0.05",
     )
-    
-    A.layout(prog="dot")
-    A.draw(output_file)
-    
-    if os.path.exists(output_file):
-        img = mpimg.imread(output_file)
-        plt.figure(figsize=figsize)
-        plt.imshow(img)
-        plt.axis("off")
-        plt.show()
-    else:
-        print("Error: output file was not created.")
+    nx.draw_networkx_nodes(
+        G,
+        pos,
+        ax=ax,
+        node_color=node_colors,
+        node_size=2200,
+        edgecolors="#1f2937",
+        linewidths=1.0,
+    )
+    nx.draw_networkx_labels(G, pos, labels=labels, ax=ax, font_size=10)
+    if edge_labels:
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax, font_size=9)
+    plt.tight_layout()
+    plt.show()
