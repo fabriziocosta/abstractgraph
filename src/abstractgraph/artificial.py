@@ -42,7 +42,11 @@ def _graph_from_type(graph_type: str, size: int, rng: random.Random) -> nx.Graph
     if graph_type == "cycle":
         return nx.cycle_graph(size)
     if graph_type == "tree":
-        return nx.random_tree(size, seed=rng.randint(0, 10**9))
+        seed = rng.randint(0, 10**9)
+        random_tree = getattr(nx, "random_labeled_tree", None)
+        if random_tree is None:
+            random_tree = nx.random_tree
+        return random_tree(size, seed=seed)
     if graph_type == "dense":
         return nx.gnp_random_graph(size, 0.45, seed=rng.randint(0, 10**9))
     if graph_type == "regular":
