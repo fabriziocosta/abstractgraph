@@ -11,6 +11,7 @@ import warnings
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, PathPatch, Polygon
 from matplotlib.path import Path
 import numpy as np
@@ -18,10 +19,6 @@ try:  # Pandas is required for notebook utilities but keep imports lazy
     import pandas as pd  # type: ignore
 except Exception:  # pragma: no cover
     pd = None  # type: ignore
-try:
-    import seaborn as sns  # type: ignore
-except Exception:  # pragma: no cover
-    sns = None  # type: ignore
 
 
 def plot_dataset_method_bars(
@@ -278,9 +275,6 @@ def plot_pareto(
 
     if pd is None:
         raise ImportError("pandas is required to plot Pareto fronts")
-    if sns is None:
-        raise ImportError("seaborn is required to plot Pareto fronts")
-
     if isinstance(results, pd.DataFrame):
         df = results.copy()
     else:
@@ -319,10 +313,10 @@ def plot_pareto(
     }
 
     if dataset_palette is None:
-        if sns is not None:
-            base_palette = sns.color_palette(n_colors=max(1, len(dataset_order)))
-        else:
-            base_palette = [plt.cm.tab10(i / max(1, len(dataset_order) - 1)) for i in range(len(dataset_order))]
+        base_palette = [
+            plt.cm.tab10(i / max(1, len(dataset_order) - 1))
+            for i in range(len(dataset_order))
+        ]
         palette_lookup = {
             dataset: base_palette[i % len(base_palette)]
             for i, dataset in enumerate(dataset_order)
@@ -420,41 +414,38 @@ def plot_pareto(
 
     non_front = df[~df["pareto_front"]]
     front = df[df["pareto_front"]]
-    legend_drawn = False
+    plot_df = df[np.isfinite(df[axis_1_col]) & np.isfinite(df[axis_2_col])]
 
-    scatter_kwargs = dict(
-        x=axis_1_col,
-        y=axis_2_col,
-        hue=dataset_col,
-        style=method_col,
-        palette=palette_lookup,
-        hue_order=dataset_order,
-        style_order=method_order,
-        markers=markers,
-        ax=ax,
-    )
+    def _scatter_subset(
+        subset_df: "pd.DataFrame",
+        *,
+        size: float,
+        linewidth: float,
+        zorder: float,
+    ) -> None:
+        if subset_df.empty:
+            return
+        for dataset_id in dataset_order:
+            dataset_subset = subset_df[subset_df[dataset_col] == dataset_id]
+            if dataset_subset.empty:
+                continue
+            for method in method_order:
+                group = dataset_subset[dataset_subset[method_col] == method]
+                if group.empty:
+                    continue
+                ax.scatter(
+                    group[axis_1_col],
+                    group[axis_2_col],
+                    s=size,
+                    marker=markers[method],
+                    c=[palette_lookup.get(dataset_id, "black")],
+                    edgecolors="black",
+                    linewidths=linewidth,
+                    zorder=zorder,
+                )
 
-    if not non_front.empty:
-        sns.scatterplot(
-            data=non_front,
-            s=110,
-            edgecolor="black",
-            linewidth=0.4,
-            legend="brief",
-            **scatter_kwargs,
-        )
-        legend_drawn = True
-
-    if not front.empty:
-        sns.scatterplot(
-            data=front,
-            s=120,
-            edgecolor="black",
-            linewidth=1.6,
-            legend=("brief" if not legend_drawn else False),
-            zorder=3,
-            **scatter_kwargs,
-        )
+    _scatter_subset(non_front, size=110, linewidth=0.4, zorder=2.6)
+    _scatter_subset(front, size=120, linewidth=1.6, zorder=3.0)
 
     def _lighten_color(color: Any, amount: float = 0.4) -> Any:
         try:
@@ -541,7 +532,37 @@ def plot_pareto(
             pass
 
     if legend:
-        handles, labels = ax.get_legend_handles_labels()
+        dataset_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker='o',
+                color='none',
+                markerfacecolor=palette_lookup.get(dataset_id, "black"),
+                markeredgecolor='black',
+                markersize=8,
+                linestyle='None',
+                label=str(dataset_id),
+            )
+            for dataset_id in dataset_order
+            if dataset_id in set(plot_df[dataset_col])
+        ]
+        method_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker=markers[method],
+                color='black',
+                markerfacecolor='white',
+                markeredgecolor='black',
+                markersize=8,
+                linestyle='None',
+                label=str(method),
+            )
+            for method in method_order
+            if method in set(plot_df[method_col])
+        ]
+        handles = dataset_handles + method_handles
         if handles:
             legend_args = dict(
                 bbox_to_anchor=(1.02, 1),
@@ -550,7 +571,7 @@ def plot_pareto(
             )
             if legend_kwargs:
                 legend_args.update(legend_kwargs)
-            ax.legend(**legend_args)
+            ax.legend(handles=handles, **legend_args)
     else:
         leg = ax.get_legend()
         if leg:
