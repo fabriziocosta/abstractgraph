@@ -821,6 +821,161 @@ def display_graphs(
     return fig
 
 
+def _draw_group_frames(
+    fig: Figure,
+    axes: List[plt.Axes],
+    group_to_cells: Dict[Any, List[int]],
+    *,
+    n_cols: int,
+    inner_gap: float = 0.008,
+    border_lw: float = 0.8,
+    border_color: str = "black",
+    inner_border_lw: float = 0.5,
+    inner_border_color: str = "0.7",
+    title_font_size: int = 8,
+    title_pad_px: float = 2.0,
+    title_formatter: Optional[Callable[[Any], str]] = None,
+    fixed_inset_px: Optional[float] = None,
+) -> None:
+    """Draw boxed group boundaries and one title per group across subplot cells."""
+    if title_formatter is None:
+        title_formatter = lambda group_key: f"Label: {group_key}"
+
+    fig_height_px = fig.get_size_inches()[1] * fig.dpi
+    title_pad = title_pad_px / fig_height_px
+
+    for group_key, cell_ids in group_to_cells.items():
+        if not cell_ids:
+            continue
+
+        for cid in cell_ids:
+            _add_axes_frame(
+                fig,
+                axes[cid],
+                edge_color=inner_border_color,
+                line_width=inner_border_lw,
+                inset_x=inner_gap,
+                inset_y=inner_gap,
+                fixed_inset_px=fixed_inset_px,
+            )
+
+        row_segments: List[Tuple[int, int, int]] = []
+        rows_map: Dict[int, List[int]] = {}
+        for cid in cell_ids:
+            row = cid // n_cols
+            col = cid % n_cols
+            rows_map.setdefault(row, []).append(col)
+        for row in sorted(rows_map.keys()):
+            cols = sorted(rows_map[row])
+            row_segments.append((row, cols[0], cols[-1]))
+
+        first_row = row_segments[0][0]
+        last_row = row_segments[-1][0]
+        first_seg_row, first_seg_col0, first_seg_col1 = row_segments[0]
+        first_ax_left = axes[first_seg_row * n_cols + first_seg_col0]
+        first_ax_right = axes[first_seg_row * n_cols + first_seg_col1]
+        first_left = first_ax_left.get_position().x0
+        first_right = first_ax_right.get_position().x1
+        first_top = first_ax_left.get_position().y1
+
+        fig.text(
+            0.5 * (first_left + first_right),
+            first_top - title_pad,
+            title_formatter(group_key),
+            ha="center",
+            va="top",
+            fontsize=title_font_size,
+            color="black",
+            bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.4},
+        )
+
+        for row, col0, col1 in row_segments:
+            left_ax = axes[row * n_cols + col0]
+            right_ax = axes[row * n_cols + col1]
+            bbox_l = left_ax.get_position()
+            bbox_r = right_ax.get_position()
+            x0, x1 = bbox_l.x0, bbox_r.x1
+            y0, y1 = bbox_l.y0, bbox_l.y1
+
+            fig.add_artist(Line2D([x0, x1], [y1, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw))
+            fig.add_artist(Line2D([x0, x1], [y0, y0], transform=fig.transFigure, color=border_color, linewidth=border_lw))
+
+            has_next_row = row < last_row
+            open_right = has_next_row and (col1 == n_cols - 1)
+            if not open_right:
+                fig.add_artist(
+                    Line2D([x1, x1], [y0, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw)
+                )
+
+            has_prev_row = row > first_row
+            open_left = has_prev_row and (col0 == 0)
+            if not open_left:
+                fig.add_artist(
+                    Line2D([x0, x0], [y0, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw)
+                )
+
+
+def display_grouped_graphs(
+    grouped_graphs: Union[Dict[Any, List[nx.Graph]], Iterable[Tuple[Any, List[nx.Graph]]]],
+    *,
+    n_graphs_per_line: int = 7,
+    size: Tuple[float, float] = (3.0, 3.0),
+    style: Optional[Dict[str, Any]] = None,
+    title_formatter: Optional[Callable[[Any], str]] = None,
+    show: bool = True,
+) -> Figure:
+    """Draw grouped NetworkX graphs with one boxed region and title per group."""
+    if isinstance(grouped_graphs, dict):
+        grouped_items = list(grouped_graphs.items())
+    else:
+        grouped_items = list(grouped_graphs)
+
+    flattened_cells: List[Tuple[Any, nx.Graph]] = [
+        (group_key, graph)
+        for group_key, graphs in grouped_items
+        for graph in graphs
+    ]
+    if not flattened_cells:
+        fig, ax = plt.subplots(figsize=size)
+        ax.axis("off")
+        if show:
+            plt.show()
+        return fig
+
+    n_cols = max(1, int(n_graphs_per_line))
+    n_rows = max(1, math.ceil(len(flattened_cells) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * size[0], n_rows * size[1]))
+
+    if isinstance(axes, plt.Axes):
+        axes_list = [axes]
+    elif n_rows == 1:
+        axes_list = list(axes)
+    else:
+        axes_list = [ax for row in axes for ax in row]
+
+    group_to_cells: Dict[Any, List[int]] = {}
+    for idx, (group_key, graph) in enumerate(flattened_cells):
+        ax = axes_list[idx]
+        display_graph(graph, ax=ax, style=style)
+        ax.axis("off")
+        group_to_cells.setdefault(group_key, []).append(idx)
+
+    for idx in range(len(flattened_cells), len(axes_list)):
+        axes_list[idx].axis("off")
+
+    plt.tight_layout()
+    _draw_group_frames(
+        fig,
+        axes_list,
+        group_to_cells,
+        n_cols=n_cols,
+        title_formatter=title_formatter,
+    )
+    if show:
+        plt.show()
+    return fig
+
+
 def display_mappings(
     abstract_graph: "AbstractGraph",
     subgraph_style: Optional[Dict[str, Any]] = None,
@@ -966,127 +1121,40 @@ def display_mappings(
         display_graph(subgraph, ax=ax, style=final_style)
         ax.axis("off")
 
-    # Draw one thin black grouped frame per label.
-    # When a group wraps to the next row, leave right/left sides open across row boundaries.
-    border_lw = 0.8
-    border_color = "black"
-    inner_border_lw = 0.5
-    inner_border_color = "0.7"
-    title_font_size = 8
-    title_pad_px = 2.0
+    _draw_group_frames(
+        fig,
+        axes,
+        label_to_cells,
+        n_cols=n_cols,
+        inner_gap=inner_gap,
+        title_formatter=lambda label: f"Label: {label}",
+        fixed_inset_px=fixed_inner_inset_px,
+    )
 
-    for label, cell_ids in label_to_cells.items():
-        if not cell_ids:
+    for cid in range(n_cells):
+        copy_count = cell_copy_counts.get(cid, 1)
+        if copy_count <= 1:
             continue
-
-        if len(cell_ids) > 1:
-            for cid in cell_ids:
-                _add_axes_frame(
-                    fig,
-                    axes[cid],
-                    edge_color=inner_border_color,
-                    line_width=inner_border_lw,
-                    inset_x=inner_gap,
-                    inset_y=inner_gap,
-                    fixed_inset_px=fixed_inner_inset_px,
-                )
-        elif cell_ids:
-            _add_axes_frame(
-                fig,
-                axes[cell_ids[0]],
-                edge_color=inner_border_color,
-                line_width=inner_border_lw,
-                inset_x=inner_gap,
-                inset_y=inner_gap,
-                fixed_inset_px=fixed_inner_inset_px,
-            )
-
-        # Build row-wise contiguous segments for this label.
-        row_segments: List[Tuple[int, int, int]] = []
-        rows_map: Dict[int, List[int]] = {}
-        for cid in cell_ids:
-            row = cid // n_cols
-            col = cid % n_cols
-            rows_map.setdefault(row, []).append(col)
-        for row in sorted(rows_map.keys()):
-            cols = sorted(rows_map[row])
-            row_segments.append((row, cols[0], cols[-1]))
-
-        first_row = row_segments[0][0]
-        last_row = row_segments[-1][0]
-
-        # Single title centered over the first row segment.
-        first_seg_row, first_seg_col0, first_seg_col1 = row_segments[0]
-        first_ax_left = axes[first_seg_row * n_cols + first_seg_col0]
-        first_ax_right = axes[first_seg_row * n_cols + first_seg_col1]
-        first_left = first_ax_left.get_position().x0
-        first_right = first_ax_right.get_position().x1
-        first_top = first_ax_left.get_position().y1
-        reserve_right_px = 0.0
-        title_pad = title_pad_px / fig_height_px
-        fig.text(
-            (first_left + first_right - (reserve_right_px / fig_width_px)) * 0.5,
-            first_top - title_pad,
-            f"Label: {label}",
-            ha="center",
-            va="top",
-            fontsize=title_font_size,
-            color="black",
-            bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.4},
+        bbox = axes[cid].get_position()
+        inner_inset_px = _effective_axes_inset_px(
+            fig,
+            axes[cid],
+            inset_x=inner_gap,
+            inset_y=inner_gap,
+            fixed_inset_px=fixed_inner_inset_px,
         )
-
-        for row, col0, col1 in row_segments:
-            left_ax = axes[row * n_cols + col0]
-            right_ax = axes[row * n_cols + col1]
-            bbox_l = left_ax.get_position()
-            bbox_r = right_ax.get_position()
-            x0, x1 = bbox_l.x0, bbox_r.x1
-            y0, y1 = bbox_l.y0, bbox_l.y1
-
-            # Top and bottom edges are always drawn for each row segment.
-            fig.add_artist(Line2D([x0, x1], [y1, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw))
-            fig.add_artist(Line2D([x0, x1], [y0, y0], transform=fig.transFigure, color=border_color, linewidth=border_lw))
-
-            # Open right edge at end-of-row when the group continues on next row.
-            has_next_row = row < last_row
-            open_right = has_next_row and (col1 == n_cols - 1)
-            if not open_right:
-                fig.add_artist(
-                    Line2D([x1, x1], [y0, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw)
-                )
-
-            # Open left edge at start-of-row when this row is a continuation chunk.
-            has_prev_row = row > first_row
-            open_left = has_prev_row and (col0 == 0)
-            if not open_left:
-                fig.add_artist(
-                    Line2D([x0, x0], [y0, y1], transform=fig.transFigure, color=border_color, linewidth=border_lw)
-                )
-
-        for cid in cell_ids:
-            copy_count = cell_copy_counts.get(cid, 1)
-            if copy_count <= 1:
-                continue
-            bbox = axes[cid].get_position()
-            inner_inset_px = _effective_axes_inset_px(
-                fig,
-                axes[cid],
-                inset_x=inner_gap,
-                inset_y=inner_gap,
-                fixed_inset_px=fixed_inner_inset_px,
-            )
-            count_pad_x = 4.0 / fig_width_px
-            count_pad_y = 2.0 / fig_height_px
-            fig.text(
-                bbox.x1 - (inner_inset_px / fig_width_px) - count_pad_x,
-                bbox.y0 + count_pad_y,
-                f"#{copy_count}",
-                ha="right",
-                va="bottom",
-                fontsize=7,
-                color="0.35",
-                bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.2},
-            )
+        count_pad_x = 4.0 / fig_width_px
+        count_pad_y = 2.0 / fig_height_px
+        fig.text(
+            bbox.x1 - (inner_inset_px / fig_width_px) - count_pad_x,
+            bbox.y0 + count_pad_y,
+            f"#{copy_count}",
+            ha="right",
+            va="bottom",
+            fontsize=7,
+            color="0.35",
+            bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.2},
+        )
 
     plt.show()
 

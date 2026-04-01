@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any, Callable, DefaultDict, Iterable, List, Tuple
+from typing import Any, Callable, DefaultDict, Iterable, List, Set, Tuple
 
 import math
 import matplotlib.pyplot as plt
@@ -12,6 +12,7 @@ from abstractgraph.graphs import (
     get_interpretation_label_to_mapped_subgraphs,
     graphs_to_abstract_graphs,
 )
+from abstractgraph.hashing import hash_graph
 from abstractgraph.labels import graph_hash_label_function_factory
 
 
@@ -23,6 +24,7 @@ def feature_subgraphs(
     """Collect every unique mapped base subgraph grouped by interpretation-node label."""
 
     label_map: DefaultDict[Any, List[nx.Graph]] = defaultdict(list)
+    seen_hashes: DefaultDict[Any, Set[int]] = defaultdict(set)
 
     for abstract_graph in graphs_to_abstract_graphs(
         list(graphs),
@@ -35,7 +37,12 @@ def feature_subgraphs(
             copy=True,
         )
         for label, subgraphs in current.items():
-            label_map[label].extend(subgraphs)
+            for subgraph in subgraphs:
+                subgraph_hash = hash_graph(subgraph, nbits=19)
+                if subgraph_hash in seen_hashes[label]:
+                    continue
+                seen_hashes[label].add(subgraph_hash)
+                label_map[label].append(subgraph)
 
     return label_map
 

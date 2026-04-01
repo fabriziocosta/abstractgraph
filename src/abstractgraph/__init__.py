@@ -1,6 +1,13 @@
 """Core AbstractGraph namespace."""
 
-from abstractgraph.display import display, display_decomposition_graph, display_graph, display_graphs, display_mappings
+from abstractgraph.display import (
+    display,
+    display_decomposition_graph,
+    display_graph,
+    display_graphs,
+    display_grouped_graphs,
+    display_mappings,
+)
 from abstractgraph.artificial import ArtificialGraphDatasetConstructor, RandomGraphConstructor
 from abstractgraph.graphs import (
     AbstractGraph,
@@ -56,6 +63,7 @@ __all__ = [
     "display",
     "display_graph",
     "display_graphs",
+    "display_grouped_graphs",
     "display_mappings",
     "display_decomposition_graph",
     "RandomGraphConstructor",

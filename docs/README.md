@@ -51,7 +51,8 @@ direction.
 - `abstractgraph.xml`
   XML round-trip for decomposition pipelines
 - `abstractgraph.display`
-  rendering for base graphs, abstract graphs, mappings, and operator DAGs
+  rendering for base graphs, abstract graphs, grouped graph families,
+  mappings, and operator DAGs
 - `abstractgraph.vectorize`
   graph-level and node-level vectorizers
 - `abstractgraph.feature_subgraphs`

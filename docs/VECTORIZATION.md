@@ -203,6 +203,12 @@ So the intended workflow is:
 1. generate hashed structural features for learning
 2. inspect representative subgraphs for active labels afterward
 
+When those labels come from a fitted estimator ranking, the higher-level ML
+helper `abstractgraph_ml.importance.display_topk_feature_subgraphs(...)` wraps
+this workflow. It uses `feature_subgraphs(...)` to recover unique mapped
+subgraphs and `abstractgraph.display.display_grouped_graphs(...)` to render
+them grouped by feature id.
+
 This is the code-level bridge between vectorization and interpretation.
 
 ## Practical Reading of the Design
