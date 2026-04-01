@@ -6,7 +6,11 @@ import networkx as nx
 import numpy as np
 
 import abstractgraph.operators as ops
-from abstractgraph.graphs import AbstractGraph, get_mapped_subgraph
+from abstractgraph.graphs import (
+    AbstractGraph,
+    get_interpretation_label_to_mapped_subgraphs,
+    get_mapped_subgraph,
+)
 from abstractgraph.vectorize import vectorize
 
 
@@ -41,6 +45,24 @@ def test_interpretation_node_helpers_store_mapped_subgraph_and_legacy_alias() ->
         warnings.simplefilter("always")
         ag.create_default_image_node()
         assert any("create_default_image_node" in str(w.message) for w in caught)
+
+
+def test_interpretation_label_to_mapped_subgraphs_groups_by_label() -> None:
+    ag = AbstractGraph(graph=_make_graph())
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1])
+    ag.create_interpretation_node_with_subgraph_from_nodes([1, 2])
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1])
+    ag.apply_label_function()
+
+    label_map = get_interpretation_label_to_mapped_subgraphs(ag)
+    assert len(label_map) == 1
+    grouped = next(iter(label_map.values()))
+    assert len(grouped) == 3
+
+    unique_label_map = ag.get_interpretation_label_to_mapped_subgraphs(unique=True)
+    unique_grouped = next(iter(unique_label_map.values()))
+    assert len(unique_grouped) == 2
+    assert all(isinstance(subgraph, nx.Graph) for subgraph in unique_grouped)
 
 
 def test_vectorize_and_to_graph_work_with_canonical_names() -> None:

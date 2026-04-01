@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any, Callable, DefaultDict, Iterable, List, Set, Tuple
+from typing import Any, Callable, DefaultDict, Iterable, List, Tuple
 
 import math
 import matplotlib.pyplot as plt
@@ -7,8 +7,11 @@ import networkx as nx
 import numpy as np
 
 from abstractgraph.display import get_color, stable_hash
-from abstractgraph.graphs import AbstractGraph, get_mapped_subgraph, graphs_to_abstract_graphs
-from abstractgraph.hashing import hash_graph
+from abstractgraph.graphs import (
+    AbstractGraph,
+    get_interpretation_label_to_mapped_subgraphs,
+    graphs_to_abstract_graphs,
+)
 from abstractgraph.labels import graph_hash_label_function_factory
 
 
@@ -20,28 +23,19 @@ def feature_subgraphs(
     """Collect every unique mapped base subgraph grouped by interpretation-node label."""
 
     label_map: DefaultDict[Any, List[nx.Graph]] = defaultdict(list)
-    seen_hashes: DefaultDict[Any, Set[int]] = defaultdict(set)
 
     for abstract_graph in graphs_to_abstract_graphs(
         list(graphs),
         decomposition_function=decomposition_function,
         nbits=nbits,
     ):
-        
-        interpretation_graph = abstract_graph.interpretation_graph
-        if interpretation_graph is None:
-            continue
-
-        for _, data in interpretation_graph.nodes(data=True):
-            label = data.get("label")
-            mapped_subgraph = get_mapped_subgraph(data)
-            if label is None or mapped_subgraph is None:
-                continue
-            mapped_subgraph_hash = hash_graph(mapped_subgraph, nbits=19)
-            if mapped_subgraph_hash in seen_hashes[label]:
-                continue
-            seen_hashes[label].add(mapped_subgraph_hash)
-            label_map[label].append(mapped_subgraph.copy())
+        current = get_interpretation_label_to_mapped_subgraphs(
+            abstract_graph,
+            unique=True,
+            copy=True,
+        )
+        for label, subgraphs in current.items():
+            label_map[label].extend(subgraphs)
 
     return label_map
 

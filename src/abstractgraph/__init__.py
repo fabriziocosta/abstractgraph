@@ -4,6 +4,7 @@ from abstractgraph.display import display, display_decomposition_graph, display_
 from abstractgraph.artificial import ArtificialGraphDatasetConstructor, RandomGraphConstructor
 from abstractgraph.graphs import (
     AbstractGraph,
+    get_interpretation_label_to_mapped_subgraphs,
     get_mapped_subgraph,
     graph_to_abstract_graph,
     graphs_to_abstract_graphs,
@@ -29,6 +30,7 @@ from abstractgraph.xml import *  # noqa: F401,F403
 
 __all__ = [
     "AbstractGraph",
+    "get_interpretation_label_to_mapped_subgraphs",
     "get_mapped_subgraph",
     "graph_to_abstract_graph",
     "graphs_to_abstract_graphs",

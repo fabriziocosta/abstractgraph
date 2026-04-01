@@ -1,6 +1,7 @@
 """Core AbstractGraph data structure and conversion utilities."""
 
 import warnings
+from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import networkx as nx
@@ -41,6 +42,45 @@ def set_mapped_subgraph(node_data: Dict[str, Any], mapped_subgraph: Optional[nx.
     """Write both canonical and legacy payload keys during the migration window."""
     node_data["mapped_subgraph"] = mapped_subgraph
     node_data["association"] = mapped_subgraph
+
+
+def get_interpretation_label_to_mapped_subgraphs(
+    abstract_graph: "AbstractGraph",
+    *,
+    unique: bool = False,
+    copy: bool = True,
+) -> Dict[Any, List[nx.Graph]]:
+    """Group mapped base subgraphs by interpretation-node label.
+
+    Args:
+        abstract_graph: AbstractGraph with an interpretation graph.
+        unique: If True, de-duplicate identical mapped subgraphs within each label
+            bucket using NetworkX's Weisfeiler-Lehman graph hash.
+        copy: If True, return copies of the mapped subgraphs.
+
+    Returns:
+        Dictionary mapping each interpretation-node label to the list of mapped
+        base subgraphs carrying that label.
+    """
+    label_map: Dict[Any, List[nx.Graph]] = defaultdict(list)
+    seen_hashes: Dict[Any, Set[str]] = defaultdict(set)
+
+    for _, data in abstract_graph.interpretation_graph.nodes(data=True):
+        label = data.get("label")
+        mapped_subgraph = get_mapped_subgraph(data)
+        if label is None or mapped_subgraph is None:
+            continue
+        if unique:
+            mapped_subgraph_hash = nx.weisfeiler_lehman_graph_hash(
+                mapped_subgraph,
+                node_attr="label",
+                edge_attr="label",
+            )
+            if mapped_subgraph_hash in seen_hashes[label]:
+                continue
+            seen_hashes[label].add(mapped_subgraph_hash)
+        label_map[label].append(mapped_subgraph.copy() if copy else mapped_subgraph)
+    return dict(label_map)
 
 
 class AbstractGraph:
@@ -260,6 +300,19 @@ class AbstractGraph:
     def get_interpretation_nodes_mapped_subgraphs(self) -> List[nx.Graph]:
         """Return the mapped subgraphs for all interpretation nodes."""
         return [get_mapped_subgraph(data) for _, data in self.interpretation_graph.nodes(data=True)]
+
+    def get_interpretation_label_to_mapped_subgraphs(
+        self,
+        *,
+        unique: bool = False,
+        copy: bool = True,
+    ) -> Dict[Any, List[nx.Graph]]:
+        """Return mapped base subgraphs grouped by interpretation-node label."""
+        return get_interpretation_label_to_mapped_subgraphs(
+            self,
+            unique=unique,
+            copy=copy,
+        )
 
     def get_image_nodes_associations(self) -> List[nx.Graph]:
         _warn_deprecated("get_image_nodes_associations", "get_interpretation_nodes_mapped_subgraphs")
