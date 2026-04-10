@@ -83,3 +83,30 @@ def test_vectorize_and_to_graph_work_with_canonical_names() -> None:
     )
     assert base_kind_count == ag.base_graph.number_of_nodes()
     assert interpretation_kind_count == ag.interpretation_graph.number_of_nodes()
+
+
+def test_connected_components_from_feature_ranking_projects_to_base_nodes() -> None:
+    graph = nx.path_graph(5)
+    for node in graph.nodes:
+        graph.nodes[node]["label"] = str(node)
+        graph.nodes[node]["attribute"] = np.array([1.0])
+
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1])
+    ag.create_interpretation_node_with_subgraph_from_nodes([1, 2])
+    ag.create_interpretation_node_with_subgraph_from_nodes([2, 3])
+    ag.create_interpretation_node_with_subgraph_from_nodes([3, 4])
+
+    labels = [10, 20, 30, 40]
+    for node_id, label in zip(ag.interpretation_graph.nodes(), labels):
+        ag.interpretation_graph.nodes[node_id]["label"] = label
+
+    out = ops.connected_components_from_feature_ranking(
+        ranked_features=[40, 30, 20, 10],
+        max_num_base_nodes=3,
+        node_agg="sum",
+    )(ag)
+
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {2, 3, 4}

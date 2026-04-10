@@ -10,7 +10,7 @@
 # UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
-# FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  filter_by_sampling
+# FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  connected_components_from_feature_ranking  filter_by_sampling
 # BINARY OPERATORS:  binary_combination  binary_intersection
 # BASE GRAPH OPERATORS: unlabel  prepend_label  restore_label
 # SCALAR OPERATORS: number_of_image_graph_nodes  number_of_image_graph_edges  quantile_number_of_subgraph_nodes  quantile_number_of_subgraph_edges  max_number_of_subgraph_nodes  min_number_of_subgraph_nodes  max_number_of_subgraph_edges  min_number_of_subgraph_edges
@@ -4759,7 +4759,7 @@ def select_top_by_feature_ranking(
 
     # Sort and select top-K.
     candidates.sort(key=lambda x: (-x[0], x[1]))
-    selected = candidates[: max(0, int(max_num)+1)]
+    selected = candidates[: max(0, int(max_num))]
 
     # Construct the output AbstractGraph with selected mapped subgraphs.
     out_abstract_graph = AbstractGraph(
@@ -4773,6 +4773,109 @@ def select_top_by_feature_ranking(
         if assoc is not None:
             # Preserve metadata if available
             out_abstract_graph.create_interpretation_node_with_subgraph_from_subgraph(assoc.copy(), meta=meta)
+
+    return out_abstract_graph
+
+
+@curry
+def connected_components_from_feature_ranking(
+    abstract_graph: 'AbstractGraph',
+    ranked_features,
+    max_num_base_nodes: int = 10,
+    node_agg: str = "sum",
+    min_component_size: int = 1,
+) -> 'AbstractGraph':
+    """Project ranked interpretation labels onto base nodes, then emit connected components.
+    Summary
+        Score base nodes by aggregating the ranked-feature scores of the
+        interpretation nodes that contain them, retain the top
+        ``max_num_base_nodes`` base nodes, induce the corresponding base-graph
+        subgraph, and emit one interpretation node per connected component.
+
+    Semantics
+        - Input AG state: Reads interpretation-node labels and mapped subgraphs.
+        - Output AG state: Returns a new AbstractGraph on the same base graph,
+          whose interpretation nodes correspond to connected components of the
+          induced subgraph on the retained base nodes.
+
+    Parameters
+        ranked_features : Sequence[int] or Mapping[int, float]
+            Label IDs in descending importance order, or a mapping from label to
+            importance score.
+        max_num_base_nodes : int, default 10
+            Number of highest-scoring base nodes to retain before computing
+            connected components.
+        node_agg : {"sum", "mean", "max"}, default "sum"
+            Aggregation used when multiple ranked interpretation nodes touch the
+            same base node.
+        min_component_size : int, default 1
+            Drop connected components smaller than this number of base nodes.
+    """
+    out_abstract_graph = AbstractGraph(
+        graph=abstract_graph.base_graph,
+        label_function=abstract_graph.label_function,
+        attribute_function=abstract_graph.attribute_function,
+        edge_function=abstract_graph.edge_function,
+    )
+    if int(max_num_base_nodes) <= 0:
+        return out_abstract_graph
+
+    if hasattr(ranked_features, "items"):
+        score_map = dict(ranked_features)
+    else:
+        ranked_list = list(ranked_features)
+        n = len(ranked_list)
+        score_map = {lbl: (n - i) for i, lbl in enumerate(ranked_list)}
+
+    node_to_values: Dict[Any, List[float]] = defaultdict(list)
+    for _, data in abstract_graph.interpretation_graph.nodes(data=True):
+        label = data.get("label")
+        if label is None and getattr(abstract_graph, "label_function", None) is not None:
+            try:
+                label = abstract_graph.label_function(data)
+            except Exception:
+                label = None
+        if label not in score_map:
+            continue
+
+        mapped_subgraph = get_mapped_subgraph(data)
+        if mapped_subgraph is None:
+            continue
+
+        score = float(score_map[label])
+        for node in mapped_subgraph.nodes():
+            node_to_values[node].append(score)
+
+    if not node_to_values:
+        return out_abstract_graph
+
+    node_scores: Dict[Any, float] = {}
+    for node, values in node_to_values.items():
+        if node_agg == "mean":
+            node_scores[node] = float(np.mean(values))
+        elif node_agg == "max":
+            node_scores[node] = float(np.max(values))
+        else:
+            node_scores[node] = float(np.sum(values))
+
+    selected_items = sorted(
+        node_scores.items(),
+        key=lambda item: (-item[1], str(item[0])),
+    )[: max(0, int(max_num_base_nodes))]
+    selected_nodes = {node for node, _ in selected_items}
+    if not selected_nodes:
+        return out_abstract_graph
+
+    induced_subgraph = abstract_graph.base_graph.subgraph(selected_nodes).copy()
+    components = connected_component_decomposition_function(induced_subgraph)
+    min_component_size = max(1, int(min_component_size))
+    for component in components:
+        if len(component) < min_component_size:
+            continue
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
+            component,
+            meta=build_meta_from_function_context(),
+        )
 
     return out_abstract_graph
 
@@ -5459,6 +5562,8 @@ try:
         filter_by_number_of_edges,
         filter_by_node_label,
         filter_by_edge_label,
+        select_top_by_feature_ranking,
+        connected_components_from_feature_ranking,
         filter_by_sampling,
 
         # Binary composition & relabelling
