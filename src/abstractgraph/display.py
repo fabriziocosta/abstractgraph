@@ -10,6 +10,7 @@ from networkx.drawing.nx_agraph import to_agraph
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.transforms as mtransforms
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
@@ -835,6 +836,7 @@ def _draw_group_frames(
     title_font_size: int = 8,
     title_pad_px: float = 2.0,
     title_formatter: Optional[Callable[[Any], str]] = None,
+    title_marker_color_formatter: Optional[Callable[[Any], Any]] = None,
     footer_formatter: Optional[Callable[[Any], Optional[str]]] = None,
     footer_font_size: int = 8,
     footer_pad_px: float = 2.0,
@@ -882,10 +884,50 @@ def _draw_group_frames(
         first_right = first_ax_right.get_position().x1
         first_top = first_ax_left.get_position().y1
 
+        title_x = 0.5 * (first_left + first_right)
+        title_y = first_top - title_pad
+        title_text = title_formatter(group_key)
+        title_artist = fig.text(
+            title_x,
+            title_y,
+            title_text,
+            ha="center",
+            va="top",
+            fontsize=title_font_size,
+            color="black",
+            bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.4},
+            alpha=0.0,
+        )
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        title_bbox = title_artist.get_window_extent(renderer=renderer)
+        title_artist.remove()
+        title_left_px = title_bbox.x0
+        title_center_y_px = 0.5 * (title_bbox.y0 + title_bbox.y1)
+        if title_marker_color_formatter is not None:
+            marker_color = title_marker_color_formatter(group_key)
+            if marker_color is not None:
+                marker_offset_px = 10.0
+                marker_x_px = title_left_px - marker_offset_px
+                marker_y_px = title_center_y_px
+                marker_x, marker_y = fig.transFigure.inverted().transform((marker_x_px, marker_y_px))
+                fig.add_artist(
+                    Line2D(
+                        [marker_x],
+                        [marker_y],
+                        transform=fig.transFigure,
+                        marker="o",
+                        markersize=8,
+                        markerfacecolor=marker_color,
+                        markeredgecolor="black",
+                        markeredgewidth=0.8,
+                        linestyle="None",
+                    )
+                )
         fig.text(
-            0.5 * (first_left + first_right),
-            first_top - title_pad,
-            title_formatter(group_key),
+            title_x,
+            title_y,
+            title_text,
             ha="center",
             va="top",
             fontsize=title_font_size,
@@ -1062,6 +1104,7 @@ def display_mappings(
         }
     else:
         subgraph_style.setdefault('cmap', 'hsv')
+    cmap_name = subgraph_style.get('cmap', 'hsv')
     
     # Group interpretation nodes by their existing label. Within each label
     # group, use a 19-bit graph hash to distinguish true isomorphic copies.
@@ -1203,6 +1246,7 @@ def display_mappings(
         n_cols=n_cols,
         inner_gap=inner_gap,
         title_formatter=lambda label: f"Label: {label}",
+        title_marker_color_formatter=lambda label: get_color(label, cmap_name=cmap_name),
         footer_formatter=_footer_formatter,
         fixed_inset_px=fixed_inner_inset_px,
     )

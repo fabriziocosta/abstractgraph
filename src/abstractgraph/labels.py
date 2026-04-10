@@ -162,6 +162,8 @@ def mean_attribute_function(subgraph: nx.Graph) -> np.ndarray:
         np.ndarray: Mean of node attributes (or ones if missing).
     """
     attr_list = [data.get('attribute', np.array([1.])) for _, data in subgraph.nodes(data=True)]
+    if not attr_list:
+        return np.array([0.0])
     return np.mean(attr_list, axis=0)
 
 #==================================================================================================

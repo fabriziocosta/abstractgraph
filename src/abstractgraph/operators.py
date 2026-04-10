@@ -7,7 +7,7 @@
 # HIGHER ORDER OPERATORS: add  compose  forward_compose  compose_product
 # CONDITIONAL OPERATORS: if_then_else  if_then_elif_else
 # ITERATION OPERATORS: for_loop  while_loop
-# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
+# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  filter_by_sampling
@@ -196,6 +196,9 @@ def build_meta_from_function_context(exclude_keys: Tuple[str, ...] = ("abstract_
     if source_chain_xml is None:
         source_chain_xml = source_function
     meta["source_chain"] = source_chain_xml
+    parent_subgraph = values.get("subgraph")
+    if isinstance(parent_subgraph, nx.Graph):
+        meta["parent_mapped_subgraph"] = parent_subgraph.copy()
     return meta
 
 
@@ -1746,6 +1749,41 @@ def edge_complement_subgraph(g, ebunch):
             g2.edges[u, v].update(g.edges[u, v])
     return g2
 
+
+def local_graph_complement_subgraph(subgraph):
+    """Return the graph complement on the current mapped subgraph node set."""
+    if nx.is_directed(subgraph):
+        g2 = nx.DiGraph()
+        g2.add_nodes_from((node, data.copy()) for node, data in subgraph.nodes(data=True))
+        nodes = list(subgraph.nodes())
+        for u in nodes:
+            for v in nodes:
+                if u == v or subgraph.has_edge(u, v):
+                    continue
+                g2.add_edge(u, v)
+    else:
+        g2 = nx.Graph()
+        g2.add_nodes_from((node, data.copy()) for node, data in subgraph.nodes(data=True))
+        nodes = list(subgraph.nodes())
+        for i, u in enumerate(nodes):
+            for v in nodes[i + 1:]:
+                if subgraph.has_edge(u, v):
+                    continue
+                g2.add_edge(u, v)
+    return g2
+
+
+def _graph_edge_key(edge, is_directed):
+    u, v = edge
+    return (u, v) if is_directed else frozenset((u, v))
+
+
+def _mapped_subgraph_group_key(subgraph):
+    is_directed = nx.is_directed(subgraph)
+    node_key = tuple(sorted(subgraph.nodes()))
+    edge_key = tuple(sorted(_graph_edge_key(edge, is_directed) for edge in subgraph.edges()))
+    return is_directed, node_key, edge_key
+
 def cycle_decomposition_function(subgraph):
     """Return node sets corresponding to all simple cycles in the subgraph."""
     cs = nx.cycle_basis(subgraph)
@@ -2385,6 +2423,53 @@ def complement(
 
 #--------------------------------------------------------------------------------    
 @curry
+def local_complement(
+    abstract_graph: 'AbstractGraph',
+    param=None
+    ) -> 'AbstractGraph':
+    """Emit node complements within each parent mapped subgraph.
+
+    Interpretation nodes are grouped by the parent mapped subgraph they were
+    decomposed from. For each parent, this operator collects the union of child
+    component nodes and returns the remaining parent nodes as one node-induced
+    subgraph.
+    """
+    out_abstract_graph = AbstractGraph(
+        graph=abstract_graph.base_graph,
+        label_function=abstract_graph.label_function,
+        attribute_function=abstract_graph.attribute_function,
+        edge_function=abstract_graph.edge_function,
+    )
+
+    grouped_children = defaultdict(list)
+    for _, data in abstract_graph.interpretation_graph.nodes(data=True):
+        subgraph = get_mapped_subgraph(data)
+        if subgraph is None:
+            continue
+        meta = data.get("meta", {})
+        parent_subgraph = meta.get("parent_mapped_subgraph", subgraph)
+        grouped_children[_mapped_subgraph_group_key(parent_subgraph)].append((parent_subgraph, subgraph))
+
+    for grouped_subgraphs in grouped_children.values():
+        parent_subgraph = grouped_subgraphs[0][0]
+        covered_nodes = set()
+        for _, subgraph in grouped_subgraphs:
+            covered_nodes.update(subgraph.nodes())
+        remaining_nodes = set(parent_subgraph.nodes()).difference(covered_nodes)
+        if not remaining_nodes:
+            continue
+        complement_subgraph = parent_subgraph.subgraph(remaining_nodes).copy()
+        meta = build_meta_from_function_context()
+        meta["parent_mapped_subgraph"] = parent_subgraph.copy()
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_subgraph(
+            complement_subgraph,
+            meta=meta
+        )
+
+    return out_abstract_graph
+
+#--------------------------------------------------------------------------------    
+@curry
 def edge_complement(
     abstract_graph: 'AbstractGraph',
     param=None
@@ -2424,6 +2509,57 @@ def edge_complement(
         out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
             complement_edges,
             meta=build_meta_from_function_context()
+        )
+
+    return out_abstract_graph
+
+#--------------------------------------------------------------------------------    
+@curry
+def local_edge_complement(
+    abstract_graph: 'AbstractGraph',
+    param=None
+    ) -> 'AbstractGraph':
+    """Emit edge complements within each parent mapped subgraph.
+
+    Interpretation nodes are grouped by the parent mapped subgraph they were
+    decomposed from. For each parent, this operator collects the union of child
+    component edges and returns the remaining parent edges as one edge-induced
+    subgraph.
+    """
+    out_abstract_graph = AbstractGraph(
+        graph=abstract_graph.base_graph,
+        label_function=abstract_graph.label_function,
+        attribute_function=abstract_graph.attribute_function,
+        edge_function=abstract_graph.edge_function,
+    )
+
+    grouped_children = defaultdict(list)
+    for _, data in abstract_graph.interpretation_graph.nodes(data=True):
+        subgraph = get_mapped_subgraph(data)
+        if subgraph is None:
+            continue
+        meta = data.get("meta", {})
+        parent_subgraph = meta.get("parent_mapped_subgraph", subgraph)
+        grouped_children[_mapped_subgraph_group_key(parent_subgraph)].append((parent_subgraph, subgraph))
+
+    for grouped_subgraphs in grouped_children.values():
+        parent_subgraph = grouped_subgraphs[0][0]
+        is_directed = nx.is_directed(parent_subgraph)
+        covered_edge_keys = set()
+        for _, subgraph in grouped_subgraphs:
+            covered_edge_keys.update(_graph_edge_key(edge, is_directed) for edge in subgraph.edges())
+        remaining_edges = [
+            edge for edge in parent_subgraph.edges()
+            if _graph_edge_key(edge, is_directed) not in covered_edge_keys
+        ]
+        if not remaining_edges:
+            continue
+        complement_subgraph = parent_subgraph.edge_subgraph(remaining_edges).copy()
+        meta = build_meta_from_function_context()
+        meta["parent_mapped_subgraph"] = parent_subgraph.copy()
+        out_abstract_graph.create_interpretation_node_with_subgraph_from_subgraph(
+            complement_subgraph,
+            meta=meta
         )
 
     return out_abstract_graph
@@ -5301,6 +5437,9 @@ try:
 
         # Unary graph transforms
         complement,
+        local_complement,
+        edge_complement,
+        local_edge_complement,
         betweenness_centrality,
         betweenness_centrality_split,
         betweenness_centrality_hop_split,
