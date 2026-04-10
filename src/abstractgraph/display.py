@@ -835,6 +835,9 @@ def _draw_group_frames(
     title_font_size: int = 8,
     title_pad_px: float = 2.0,
     title_formatter: Optional[Callable[[Any], str]] = None,
+    footer_formatter: Optional[Callable[[Any], Optional[str]]] = None,
+    footer_font_size: int = 8,
+    footer_pad_px: float = 2.0,
     fixed_inset_px: Optional[float] = None,
 ) -> None:
     """Draw boxed group boundaries and one title per group across subplot cells."""
@@ -843,6 +846,7 @@ def _draw_group_frames(
 
     fig_height_px = fig.get_size_inches()[1] * fig.dpi
     title_pad = title_pad_px / fig_height_px
+    footer_pad = footer_pad_px / fig_height_px
 
     for group_key, cell_ids in group_to_cells.items():
         if not cell_ids:
@@ -888,6 +892,26 @@ def _draw_group_frames(
             color="black",
             bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.4},
         )
+
+        if footer_formatter is not None:
+            footer_text = footer_formatter(group_key)
+            if footer_text:
+                last_seg_row, last_seg_col0, last_seg_col1 = row_segments[-1]
+                last_ax_left = axes[last_seg_row * n_cols + last_seg_col0]
+                last_ax_right = axes[last_seg_row * n_cols + last_seg_col1]
+                last_left = last_ax_left.get_position().x0
+                last_right = last_ax_right.get_position().x1
+                last_bottom = last_ax_left.get_position().y0
+                fig.text(
+                    0.5 * (last_left + last_right),
+                    last_bottom + footer_pad,
+                    footer_text,
+                    ha="center",
+                    va="bottom",
+                    fontsize=footer_font_size,
+                    color="0.25",
+                    bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.4},
+                )
 
         for row, col0, col1 in row_segments:
             left_ax = axes[row * n_cols + col0]
@@ -1014,6 +1038,17 @@ def display_mappings(
         print("[display_mappings] Empty abstract graph — nothing to display.")
         return
 
+    def _operator_text_from_meta(node_data: Dict[str, Any]) -> Optional[str]:
+        meta = node_data.get("meta", {})
+        operator_text = meta.get("user_name")
+        if operator_text is None:
+            operator_text = meta.get("source_chain")
+        if operator_text is None:
+            return None
+        if not isinstance(operator_text, str):
+            operator_text = str(operator_text)
+        return operator_text
+
     # Set default subgraph style if not provided.
     if subgraph_style is None:
         subgraph_style = {
@@ -1030,7 +1065,8 @@ def display_mappings(
     
     # Group interpretation nodes by their existing label. Within each label
     # group, use a 19-bit graph hash to distinguish true isomorphic copies.
-    mapping_dict: Dict[Any, Dict[int, List[nx.Graph]]] = {}
+    mapping_dict: Dict[Any, Dict[Tuple[int, Optional[str]], List[nx.Graph]]] = {}
+    label_to_operator_text: Dict[Any, Optional[str]] = {}
     for node, data in abstract_graph.interpretation_graph.nodes(data=True):
         mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
         if mapped_subgraph is None:
@@ -1039,7 +1075,10 @@ def display_mappings(
         if label is None:
             label = stable_hash(str(node))
         iso_hash = hash_graph(mapped_subgraph, nbits=19)
-        mapping_dict.setdefault(label, {}).setdefault(iso_hash, []).append(mapped_subgraph)
+        operator_text = _operator_text_from_meta(data)
+        if label not in label_to_operator_text:
+            label_to_operator_text[label] = operator_text
+        mapping_dict.setdefault(label, {}).setdefault((iso_hash, operator_text), []).append(mapped_subgraph)
 
     # Sort label groups by total frequency descending. Within each label group,
     # collapse exact copies into one displayed cell with a multiplicity marker.
@@ -1049,14 +1088,14 @@ def display_mappings(
         reverse=True,
     )
     n_cols = max(1, int(n_elements_per_row))
-    expanded_cells: List[Tuple[Any, nx.Graph, int]] = []
+    expanded_cells: List[Tuple[Any, nx.Graph, int, Optional[str]]] = []
     for label, iso_groups in sorted_mappings:
-        for _iso_hash, subgraph_list in sorted(
+        for (_iso_hash, operator_text), subgraph_list in sorted(
             iso_groups.items(),
             key=lambda item: len(item[1]),
             reverse=True,
         ):
-            expanded_cells.append((label, subgraph_list[0], len(subgraph_list)))
+            expanded_cells.append((label, subgraph_list[0], len(subgraph_list), operator_text))
 
     n_cells = len(expanded_cells)
     n_rows = max(1, math.ceil(n_cells / n_cols))
@@ -1090,7 +1129,7 @@ def display_mappings(
     label_to_cells: Dict[Any, List[int]] = {}
     cell_copy_counts: Dict[int, int] = {}
     cell_draw_specs: Dict[int, Tuple[nx.Graph, Dict[str, Any]]] = {}
-    for i, (label, subgraph, copy_count) in enumerate(expanded_cells):
+    for i, (label, subgraph, copy_count, operator_text) in enumerate(expanded_cells):
         ax = axes[i]
         style_for_subgraph = dense_subgraph_style if subgraph.number_of_nodes() >= n_nodes_for_larger_size else subgraph_style
         display_graph(subgraph, ax=ax, style=style_for_subgraph)
@@ -1121,20 +1160,20 @@ def display_mappings(
         display_graph(subgraph, ax=ax, style=final_style)
         ax.axis("off")
 
-    _draw_group_frames(
-        fig,
-        axes,
-        label_to_cells,
-        n_cols=n_cols,
-        inner_gap=inner_gap,
-        title_formatter=lambda label: f"Label: {label}",
-        fixed_inset_px=fixed_inner_inset_px,
-    )
+    show_operator_footer = getattr(getattr(abstract_graph, "label_function", None), "label_mode", None) == "operator_hash"
+
+    def _footer_formatter(label: Any) -> Optional[str]:
+        if not show_operator_footer:
+            return None
+        operator_text = label_to_operator_text.get(label)
+        if not operator_text:
+            return None
+        max_chars = 72
+        footer_text = operator_text if len(operator_text) <= max_chars else operator_text[: max_chars - 3] + "..."
+        return f"Operator: {footer_text}"
 
     for cid in range(n_cells):
         copy_count = cell_copy_counts.get(cid, 1)
-        if copy_count <= 1:
-            continue
         bbox = axes[cid].get_position()
         inner_inset_px = _effective_axes_inset_px(
             fig,
@@ -1143,18 +1182,30 @@ def display_mappings(
             inset_y=inner_gap,
             fixed_inset_px=fixed_inner_inset_px,
         )
-        count_pad_x = 4.0 / fig_width_px
-        count_pad_y = 2.0 / fig_height_px
-        fig.text(
-            bbox.x1 - (inner_inset_px / fig_width_px) - count_pad_x,
-            bbox.y0 + count_pad_y,
-            f"#{copy_count}",
-            ha="right",
-            va="bottom",
-            fontsize=7,
-            color="0.35",
-            bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.2},
-        )
+        if copy_count > 1:
+            count_pad_x = 4.0 / fig_width_px
+            count_pad_y = 2.0 / fig_height_px
+            fig.text(
+                bbox.x1 - (inner_inset_px / fig_width_px) - count_pad_x,
+                bbox.y0 + count_pad_y,
+                f"#{copy_count}",
+                ha="right",
+                va="bottom",
+                fontsize=7,
+                color="0.35",
+                bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.2},
+            )
+
+    _draw_group_frames(
+        fig,
+        axes,
+        label_to_cells,
+        n_cols=n_cols,
+        inner_gap=inner_gap,
+        title_formatter=lambda label: f"Label: {label}",
+        footer_formatter=_footer_formatter,
+        fixed_inset_px=fixed_inner_inset_px,
+    )
 
     plt.show()
 

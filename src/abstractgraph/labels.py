@@ -34,6 +34,7 @@ def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[d
             raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
         return hash_graph(subgraph, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "graph_hash"
     return label_fn
 
 def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
@@ -60,6 +61,7 @@ def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> C
 
         return hash_graph(structure_graph, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "graph_structure_hash"
     return label_fn
 
 
@@ -80,6 +82,7 @@ def source_function_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> C
         # Use stable, bounded hashing for reproducibility and column consistency
         return hash_bounded(source, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "source_function_hash"
     return label_fn
 
 def source_chain_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
@@ -101,6 +104,7 @@ def source_chain_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Call
             source_chain = str(source_chain)
         return hash_bounded(source_chain, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "source_chain_hash"
     return label_fn
 
 def name_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
@@ -126,6 +130,7 @@ def name_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[di
             name = str(name)
         return hash_bounded(name, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "operator_hash"
     return label_fn
 
 #==================================================================================================

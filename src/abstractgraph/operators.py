@@ -2009,19 +2009,20 @@ def path(
     return out_abstract_graph
 
 #--------------------------------------------------------------------------------
-def spine_decomposition_function(subgraph, radius=0):
-    """Return one spine node set built from a random diameter path.
+def spine_decomposition_function(subgraph, radius=0, seed=42):
+    """Return one spine node set built from a reproducible diameter path.
 
     For each source node, run BFS over the subgraph, collect all shortest paths
     from that source to the farthest reachable nodes, and keep every path whose
     edge length matches the graph-wide maximum. One of those longest paths is
-    chosen uniformly at random. The final node set is the union of the chosen
-    path and all nodes within ``radius`` hops of any path node.
+    chosen uniformly at random using ``seed``. The final node set is the union
+    of the chosen path and all nodes within ``radius`` hops of any path node.
     """
     if not isinstance(radius, int) or radius < 0:
         raise ValueError("radius must be a non-negative integer")
     if subgraph.number_of_nodes() == 0:
         return []
+    rng = random.Random(seed)
 
     longest_paths = []
     max_length = -1
@@ -2045,7 +2046,7 @@ def spine_decomposition_function(subgraph, radius=0):
         chosen_path = (next(iter(subgraph.nodes())),)
     else:
         unique_paths = list(dict.fromkeys(longest_paths))
-        chosen_path = random.choice(unique_paths)
+        chosen_path = rng.choice(unique_paths)
 
     spine_nodes = set(chosen_path)
     if radius > 0:
@@ -2057,7 +2058,8 @@ def spine_decomposition_function(subgraph, radius=0):
 @curry
 def spine(
     abstract_graph: 'AbstractGraph',
-    radius=0
+    radius=0,
+    seed=42
     ) -> 'AbstractGraph':
     """Emit one interpretation node per mapped subgraph using a diameter spine.
     Summary
@@ -2071,6 +2073,9 @@ def spine(
         radius : int, default 0
             Hop radius added around every node on the selected spine path.
             ``0`` returns only the path nodes themselves.
+        seed : int | None, default 42
+            Seed used to choose among equally long candidate spine paths.
+            Use a fixed value for reproducible decompositions.
     """
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -2080,7 +2085,7 @@ def spine(
     )
 
     for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = spine_decomposition_function(subgraph, radius=radius)
+        components = spine_decomposition_function(subgraph, radius=radius, seed=seed)
         for component in components:
             out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
                 component,
