@@ -7,7 +7,7 @@
 # HIGHER ORDER OPERATORS: add  compose  forward_compose  compose_product
 # CONDITIONAL OPERATORS: if_then_else  if_then_elif_else
 # ITERATION OPERATORS: for_loop  while_loop
-# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  graphlet  clique  complement  edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
+# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  filter_by_sampling
@@ -2006,6 +2006,87 @@ def path(
                 meta=build_meta_from_function_context()
             )
     
+    return out_abstract_graph
+
+#--------------------------------------------------------------------------------
+def spine_decomposition_function(subgraph, radius=0):
+    """Return one spine node set built from a random diameter path.
+
+    For each source node, run BFS over the subgraph, collect all shortest paths
+    from that source to the farthest reachable nodes, and keep every path whose
+    edge length matches the graph-wide maximum. One of those longest paths is
+    chosen uniformly at random. The final node set is the union of the chosen
+    path and all nodes within ``radius`` hops of any path node.
+    """
+    if not isinstance(radius, int) or radius < 0:
+        raise ValueError("radius must be a non-negative integer")
+    if subgraph.number_of_nodes() == 0:
+        return []
+
+    longest_paths = []
+    max_length = -1
+    for source in subgraph.nodes():
+        shortest_paths = nx.single_source_shortest_path(subgraph, source)
+        if not shortest_paths:
+            continue
+        local_max_length = max(len(path) - 1 for path in shortest_paths.values())
+        for path_nodes in shortest_paths.values():
+            path_length = len(path_nodes) - 1
+            if path_length != local_max_length:
+                continue
+            canonical_path = tuple(path_nodes)
+            if path_length > max_length:
+                max_length = path_length
+                longest_paths = [canonical_path]
+            elif path_length == max_length:
+                longest_paths.append(canonical_path)
+
+    if not longest_paths:
+        chosen_path = (next(iter(subgraph.nodes())),)
+    else:
+        unique_paths = list(dict.fromkeys(longest_paths))
+        chosen_path = random.choice(unique_paths)
+
+    spine_nodes = set(chosen_path)
+    if radius > 0:
+        for node_id in chosen_path:
+            spine_nodes.update(get_reachable_nodes_bfs(subgraph, node_id, cutoff=radius))
+    return [tuple(sorted(spine_nodes))]
+
+
+@curry
+def spine(
+    abstract_graph: 'AbstractGraph',
+    radius=0
+    ) -> 'AbstractGraph':
+    """Emit one interpretation node per mapped subgraph using a diameter spine.
+    Summary
+        For each mapped subgraph, find one random path among the longest BFS
+        paths (graph-diameter candidates), then optionally thicken that path by
+        including all nodes within ``radius`` hops of the path nodes. The
+        induced subgraph on that final node set becomes one interpretation
+        node.
+
+    Parameters
+        radius : int, default 0
+            Hop radius added around every node on the selected spine path.
+            ``0`` returns only the path nodes themselves.
+    """
+    out_abstract_graph = AbstractGraph(
+        graph=abstract_graph.base_graph,
+        label_function=abstract_graph.label_function,
+        attribute_function=abstract_graph.attribute_function,
+        edge_function=abstract_graph.edge_function,
+    )
+
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+        components = spine_decomposition_function(subgraph, radius=radius)
+        for component in components:
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
+                component,
+                meta=build_meta_from_function_context()
+            )
+
     return out_abstract_graph
 
 #--------------------------------------------------------------------------------
@@ -5209,6 +5290,7 @@ try:
         cycle,
         tree,
         path,
+        spine,
         graphlet,
         clique,
 
