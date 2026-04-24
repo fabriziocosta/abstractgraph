@@ -320,10 +320,10 @@ def display_graph(
     pack_padding: float = 1.0,
     node_labels: bool = False,
     node_label_attr: str = 'label',
-    node_label_font_size: int = 8,
+    node_label_font_size: int = 6,
     edge_labels: bool = False,
     edge_label_attr: str = 'label',
-    edge_label_font_size: int = 7,
+    edge_label_font_size: int = 6,
     fit_viewport: bool = True,
 ) -> Optional[plt.Axes]:
     """
@@ -335,6 +335,9 @@ def display_graph(
         graph: The NetworkX graph to display.
         ax: The Matplotlib axis to draw on. If None, a new figure and axis are created.
         style: A dict of style parameters for drawing (node_size, edge_width, etc.).
+            Directed graphs also honor arrow styling keys such as `arrowsize`,
+            `arrowstyle`, `min_source_margin`, `min_target_margin`, and
+            `connectionstyle`.
         pos: Optional pre-calculated node positions. If None, Kamada-Kawai layout is used.
         offset: A tuple (x_offset, y_offset) to shift the graph's position.
         size: The figure size if `ax` is None.
@@ -416,13 +419,24 @@ def display_graph(
         )
 
     # Draw the graph edges.
-    nx.draw_networkx_edges(
-        graph, final_pos,
-        width=style['edge_width'],
-        style=style['edge_style'],
-        edge_color=style['edge_color'],
-        ax=ax
-    )
+    edge_kwargs = {
+        "width": style['edge_width'],
+        "style": style['edge_style'],
+        "edge_color": style['edge_color'],
+        "ax": ax,
+    }
+    if graph.is_directed():
+        edge_kwargs.update(
+            arrows=style.get('arrows', True),
+            arrowstyle=style.get('arrowstyle', '-|>'),
+            arrowsize=style.get('arrowsize', 12),
+            min_source_margin=style.get('min_source_margin', 0),
+            min_target_margin=style.get('min_target_margin', 0),
+        )
+        connectionstyle = style.get('connectionstyle')
+        if connectionstyle is not None:
+            edge_kwargs['connectionstyle'] = connectionstyle
+    nx.draw_networkx_edges(graph, final_pos, **edge_kwargs)
 
     # Optional node labels
     if node_labels:
@@ -1626,69 +1640,10 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
         else:
             print("Error: output file was not created.")
         return
-    except ImportError:
-        pass
-
-    # Fallback when Graphviz bindings are unavailable: use a layered NetworkX layout.
-    levels = {node: 0 for node in G.nodes}
-    for generation_idx, generation in enumerate(nx.topological_generations(G)):
-        for node in generation:
-            levels[node] = generation_idx
-
-    grouped: Dict[int, List[Any]] = {}
-    for node, level in levels.items():
-        grouped.setdefault(level, []).append(node)
-
-    pos: Dict[Any, Tuple[float, float]] = {}
-    max_width = max((len(nodes) for nodes in grouped.values()), default=1)
-    for level, nodes in grouped.items():
-        ordered_nodes = sorted(nodes, key=str)
-        width = len(ordered_nodes)
-        x_offset = (max_width - width) / 2.0
-        for idx, node in enumerate(ordered_nodes):
-            pos[node] = (x_offset + idx, -level)
-
-    plt.figure(figsize=figsize)
-    ax = plt.gca()
-    ax.set_axis_off()
-
-    node_colors = [
-        DATA_TYPE_STYLES.get(G.nodes[node].get("data_type", "parameter"), {"fillcolor": "grey"})["fillcolor"]
-        for node in G.nodes
-    ]
-    edge_widths = [
-        1.0 if G.nodes[tail].get("data_type", "parameter") in ("parameter", "value") else 2.5
-        for tail, _head in G.edges
-    ]
-    labels = {node: G.nodes[node].get("label", node) for node in G.nodes}
-    edge_labels = {
-        (tail, head): G.edges[tail, head]["label"]
-        for tail, head in G.edges
-        if G.edges[tail, head].get("label")
-    }
-
-    nx.draw_networkx_edges(
-        G,
-        pos,
-        ax=ax,
-        arrows=True,
-        arrowstyle="-|>",
-        arrowsize=16,
-        width=edge_widths,
-        edge_color="#4a5568",
-        connectionstyle="arc3,rad=0.05",
-    )
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        ax=ax,
-        node_color=node_colors,
-        node_size=2200,
-        edgecolors="#1f2937",
-        linewidths=1.0,
-    )
-    nx.draw_networkx_labels(G, pos, labels=labels, ax=ax, font_size=10)
-    if edge_labels:
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax, font_size=9)
-    plt.tight_layout()
-    plt.show()
+    except ImportError as exc:
+        raise ImportError(
+            "display_decomposition_graph requires Graphviz rendering via pygraphviz. "
+            "Install pygraphviz and the Graphviz system package to render decomposition graphs."
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError("Graphviz failed to render the decomposition graph.") from exc

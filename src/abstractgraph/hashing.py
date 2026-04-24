@@ -26,16 +26,22 @@ Graph hashing (label-aware)
 - hash_rooted_graph: For each root, perform BFS to group nodes by distance and
   combine their node hashes per layer; then combine layers in order to form a
   rooted-subgraph hash.
+- canonical_dfs_graph_signature: Build a relabeling-invariant DFS certificate
+  on top of rooted hashes. Candidate traversal order is driven by node hashes,
+  edge labels, and direction tags; tied candidates are enumerated and the
+  lexicographically smallest certificate is kept.
 - hash_graph: Aggregate information across the whole graph by combining rooted
-  subgraph hashes along edges with edge labels, plus a multiset hash of all
-  node labels. Finally bound to nbits using hash_bounded.
+  subgraph hashes along edges with edge labels, a canonical DFS certificate,
+  plus a multiset hash of all node labels. Finally bound to nbits using
+  hash_bounded.
 
 Notes and limitations
 - Only the 'label' attribute is used for nodes/edges. For MultiGraph/DiGraph,
   adapt edge iteration to handle keys/direction explicitly.
 - canonicalize does not special-case NetworkX graphs; use `hash_graph` directly
   when you intend to hash a graph object.
-- Complexity: hashing all rooted subgraphs is roughly O(V·(V+E)). For large
+- Complexity: hashing all rooted subgraphs is roughly O(V·(V+E)); the canonical
+  DFS certificate can add branching in tied neighborhoods. For large symmetric
   graphs, consider caching, limiting radius, or alternative summaries.
 - Collisions: Cryptographic hashing minimizes but does not eliminate collisions;
   reducing to nbits increases collision risk. Choose nbits to balance size and
@@ -47,7 +53,7 @@ import json
 import math
 from base64 import b64encode
 from collections import defaultdict
-from typing import Any, Optional, List, Tuple, Dict, Union
+from typing import Any, Optional, List, Tuple, Dict, Union, Set
 import numpy as np
 import networkx as nx
 try:
@@ -376,6 +382,178 @@ def hash_rooted_graph(node_idx: int, graph: nx.Graph, node_hash_dict: Dict[int, 
     return subgraph_hash
 
 
+def _iter_traversal_edges(graph: nx.Graph, node_idx: Any) -> List[Tuple[str, Any, Any]]:
+    """Return incident traversal edges as (direction, neighbor, edge_label)."""
+    if nx.is_directed(graph):
+        edges: List[Tuple[str, Any, Any]] = []
+        for neighbor_idx in graph.successors(node_idx):
+            edges.append(("out", neighbor_idx, graph.edges[node_idx, neighbor_idx].get("label", "")))
+        for neighbor_idx in graph.predecessors(node_idx):
+            edges.append(("in", neighbor_idx, graph.edges[neighbor_idx, node_idx].get("label", "")))
+        return edges
+
+    return [
+        ("undirected", neighbor_idx, graph.edges[node_idx, neighbor_idx].get("label", ""))
+        for neighbor_idx in graph.neighbors(node_idx)
+    ]
+
+
+def _traversal_edge_key(direction_tag: str, edge_label: Any, neighbor_hash: int) -> Tuple[Any, ...]:
+    """Return a relabeling-invariant ordering key for a traversal edge."""
+    return (direction_tag, canonicalize(edge_label), neighbor_hash)
+
+
+def _canonical_dfs_signature_from_root(
+    graph: nx.Graph,
+    root: Any,
+    node_hash_dict: Dict[Any, int],
+) -> Tuple[Any, ...]:
+    """Build a canonical DFS signature, enumerating only tied next-candidate choices.
+
+    Candidate ordering uses the already-computed node hashes, edge labels, and
+    direction tags. When multiple unvisited neighbors share the same key, each
+    tied choice is explored and the lexicographically smallest resulting
+    certificate is kept. Node ids are used only as dictionary keys, never as
+    ordering tie-breakers, so the signature remains stable under relabeling.
+    """
+
+    def visit(
+        node_idx: Any,
+        visited: Set[Any],
+        discovery_index: Dict[Any, int],
+    ) -> Tuple[Tuple[Any, ...], Set[Any], Dict[Any, int]]:
+        visited_edges = []
+        for direction_tag, neighbor_idx, edge_label in _iter_traversal_edges(graph, node_idx):
+            if neighbor_idx in discovery_index:
+                visited_edges.append(
+                    (
+                        direction_tag,
+                        canonicalize(edge_label),
+                        discovery_index[neighbor_idx],
+                    )
+                )
+        visited_edges.sort()
+
+        suffix, visited, discovery_index = process_node(node_idx, visited, discovery_index)
+        signature = (
+            ("node", node_hash_dict[node_idx]),
+            ("visited_edges", tuple(visited_edges)),
+            *suffix,
+        )
+        return signature, visited, discovery_index
+
+    def process_node(
+        node_idx: Any,
+        visited: Set[Any],
+        discovery_index: Dict[Any, int],
+    ) -> Tuple[Tuple[Any, ...], Set[Any], Dict[Any, int]]:
+        candidates = []
+        for direction_tag, neighbor_idx, edge_label in _iter_traversal_edges(graph, node_idx):
+            if neighbor_idx in visited:
+                continue
+            key = _traversal_edge_key(direction_tag, edge_label, node_hash_dict[neighbor_idx])
+            candidates.append((key, neighbor_idx))
+
+        if not candidates:
+            return (), visited, discovery_index
+
+        min_key = min(key for key, _ in candidates)
+        tied_next_nodes = []
+        seen_next_nodes = set()
+        for key, neighbor_idx in candidates:
+            if key == min_key and neighbor_idx not in seen_next_nodes:
+                tied_next_nodes.append(neighbor_idx)
+                seen_next_nodes.add(neighbor_idx)
+
+        best_branch = None
+        best_visited = None
+        best_discovery_index = None
+        for neighbor_idx in tied_next_nodes:
+            next_visited = set(visited)
+            next_discovery_index = dict(discovery_index)
+            next_visited.add(neighbor_idx)
+            next_discovery_index[neighbor_idx] = len(next_discovery_index)
+
+            child_signature, child_visited, child_discovery_index = visit(
+                neighbor_idx,
+                next_visited,
+                next_discovery_index,
+            )
+            rest_signature, final_visited, final_discovery_index = process_node(
+                node_idx,
+                child_visited,
+                child_discovery_index,
+            )
+            branch = (("tree_edge", min_key, child_signature), *rest_signature)
+            if best_branch is None or branch < best_branch:
+                best_branch = branch
+                best_visited = final_visited
+                best_discovery_index = final_discovery_index
+
+        return best_branch or (), best_visited or visited, best_discovery_index or discovery_index
+
+    def process_remaining_components(
+        visited: Set[Any],
+        discovery_index: Dict[Any, int],
+    ) -> Tuple[Tuple[Any, ...], Set[Any], Dict[Any, int]]:
+        remaining = [node_idx for node_idx in graph.nodes() if node_idx not in visited]
+        if not remaining:
+            return (), visited, discovery_index
+
+        min_hash = min(node_hash_dict[node_idx] for node_idx in remaining)
+        tied_roots = [node_idx for node_idx in remaining if node_hash_dict[node_idx] == min_hash]
+
+        best_branch = None
+        best_visited = None
+        best_discovery_index = None
+        for next_root in tied_roots:
+            next_visited = set(visited)
+            next_discovery_index = dict(discovery_index)
+            next_visited.add(next_root)
+            next_discovery_index[next_root] = len(next_discovery_index)
+
+            component_signature, component_visited, component_discovery_index = visit(
+                next_root,
+                next_visited,
+                next_discovery_index,
+            )
+            rest_signature, final_visited, final_discovery_index = process_remaining_components(
+                component_visited,
+                component_discovery_index,
+            )
+            branch = (("component", component_signature), *rest_signature)
+            if best_branch is None or branch < best_branch:
+                best_branch = branch
+                best_visited = final_visited
+                best_discovery_index = final_discovery_index
+
+        return best_branch or (), best_visited or visited, best_discovery_index or discovery_index
+
+    initial_visited = {root}
+    initial_discovery_index = {root: 0}
+    root_signature, visited_after_root, discovery_after_root = visit(
+        root,
+        initial_visited,
+        initial_discovery_index,
+    )
+    remaining_signature, _, _ = process_remaining_components(visited_after_root, discovery_after_root)
+    return (
+        "canonical_dfs",
+        "directed" if nx.is_directed(graph) else "undirected",
+        ("root", root_signature),
+        *remaining_signature,
+    )
+
+
+def canonical_dfs_graph_signature(graph: nx.Graph, node_hash_dict: Dict[Any, int]) -> Tuple[Any, ...]:
+    """Return a relabeling-invariant DFS certificate for the whole graph."""
+    rooted_signatures = [
+        _canonical_dfs_signature_from_root(graph, node_idx, node_hash_dict)
+        for node_idx in graph.nodes()
+    ]
+    return tuple(sorted(rooted_signatures))
+
+
 def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
     """
     Computes a hash for the entire graph by hashing all rooted subgraphs.
@@ -407,6 +585,7 @@ def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
     node_labels_set_hash = compute_node_labels_set_hash(graph)
     hashes_list.append(node_labels_set_hash)
     hashes_list.append(hash_value("directed" if nx.is_directed(graph) else "undirected"))
+    hashes_list.append(hash_value(canonical_dfs_graph_signature(graph, rooted_subgraph_hashes)))
     
     # Iterate over each edge in the graph
     for u, v in graph.edges():

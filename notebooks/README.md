@@ -8,6 +8,9 @@ Layout:
 - `research/` for exploratory core-only notebooks
 
 Recommended sequence:
+- `examples/example_graph_hashing_directed_vs_undirected.ipynb`
+  Small labeled graphs showing how graph hashes differ for undirected and
+  directed edge semantics.
 - `examples/example_abstract_graph_operators_01_unary_decompositions.ipynb`
   Step 1: unary decomposition operators and visual intuition.
 - `examples/example_abstract_graph_operators_02_composition_and_add.ipynb`

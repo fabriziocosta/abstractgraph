@@ -156,6 +156,42 @@ def test_hash_graph_distinguishes_edge_orientation() -> None:
     assert hash_graph(directed_forward, nbits=18) != hash_graph(directed_reverse, nbits=18)
 
 
+def test_hash_graph_distinguishes_same_label_same_degree_cross_edge_structure() -> None:
+    labels = {node: "A" for node in range(1, 7)}
+    graph_a_edges = [
+        (3, 4),
+        (4, 5),
+        (3, 5),
+        (3, 2),
+        (5, 6),
+        (2, 6),
+        (2, 1),
+        (1, 6),
+    ]
+    graph_b_edges = [
+        (3, 4),
+        (4, 5),
+        (3, 2),
+        (5, 6),
+        (2, 1),
+        (1, 6),
+        (3, 6),
+        (2, 5),
+    ]
+
+    graph_a = nx.Graph()
+    graph_b = nx.Graph()
+    for graph, edges in ((graph_a, graph_a_edges), (graph_b, graph_b_edges)):
+        graph.add_nodes_from((node, {"label": label}) for node, label in labels.items())
+        graph.add_edges_from((u, v, {"label": ""}) for u, v in edges)
+
+    assert sorted(dict(graph_a.degree()).values()) == sorted(dict(graph_b.degree()).values())
+    assert hash_graph(graph_a, nbits=31) != hash_graph(graph_b, nbits=31)
+
+    relabeled = nx.relabel_nodes(graph_a, {node: f"node-{node}" for node in graph_a.nodes()})
+    assert hash_graph(graph_a, nbits=31) == hash_graph(relabeled, nbits=31)
+
+
 def test_directed_graph_to_abstract_graph_uses_weak_connectivity() -> None:
     graph = nx.DiGraph()
     graph.add_node(0, label="a", attribute=np.array([1.0]))
