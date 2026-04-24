@@ -2,6 +2,7 @@
 
 import os
 import inspect
+import textwrap
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -21,6 +22,55 @@ from abstractgraph.graphs import AbstractGraph, is_simple_graph
 from abstractgraph.hashing import hash_graph
 
 _NETWORKX_GRAPH_TYPES = (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)
+
+
+def _wrap_graphviz_label(label: Any, width: int = 36) -> str:
+    """Wrap long Graphviz labels so node dimensions stay readable."""
+    label_text = str(label)
+    if len(label_text) <= width and "\n" not in label_text:
+        return label_text
+
+    wrapped_lines = []
+    for line in label_text.splitlines() or [""]:
+        line = line.replace("_", "_ ")
+        wrapped = textwrap.wrap(
+            line,
+            width=width,
+            break_long_words=True,
+            break_on_hyphens=False,
+        )
+        wrapped_lines.extend(part.replace("_ ", "_") for part in wrapped)
+        if not wrapped:
+            wrapped_lines.append("")
+    return "\n".join(wrapped_lines)
+
+
+def _graph_with_edge_label_nodes(graph: nx.DiGraph) -> nx.DiGraph:
+    """Represent edge labels as small intermediate nodes for cleaner Graphviz layout."""
+    graph_for_display = graph.copy()
+    for index, (tail, head, data) in enumerate(list(graph.edges(data=True))):
+        edge_label = data.get("label")
+        if not edge_label:
+            continue
+
+        label_node = f"__edge_label_{index}"
+        while label_node in graph_for_display:
+            label_node = f"{label_node}_"
+
+        graph_for_display.remove_edge(tail, head)
+        graph_for_display.add_node(
+            label_node,
+            data_type="edge_label",
+            label=edge_label,
+        )
+
+        first_edge_data = {key: value for key, value in data.items() if key != "label"}
+        second_edge_data = dict(first_edge_data)
+        first_edge_data.setdefault("arrowhead", "none")
+        graph_for_display.add_edge(tail, label_node, **first_edge_data)
+        graph_for_display.add_edge(label_node, head, **second_edge_data)
+
+    return graph_for_display
 
 
 def _is_networkx_graph(obj: Any) -> bool:
@@ -1575,6 +1625,15 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
         "function": {"shape": "rectangle", "fillcolor": "#A4D3EE"},
         "parameter": {"shape": "oval", "fillcolor": "#FFC125"},
         "operator": {"shape": "hexagon", "fillcolor": "#B0C4DE"},
+        "edge_label": {
+            "shape": "box",
+            "style": "rounded,filled",
+            "fillcolor": "#FFFFFF",
+            "color": "#B8C1CC",
+            "fontcolor": "#555555",
+            "fontsize": "9",
+            "margin": "0.04,0.02",
+        },
     }
     
     if isinstance(comp_func_or_graph, nx.DiGraph):
@@ -1582,20 +1641,25 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
     else:
         G = decomposition_to_graph(comp_func_or_graph)
     
+    graph_for_display = _graph_with_edge_label_nodes(G)
+
     try:
-        A = to_agraph(G)
+        A = to_agraph(graph_for_display)
 
         for n in A.nodes():
             node_name = n.get_name()
-            display_label = G.nodes[node_name].get("label", node_name)
+            display_label = graph_for_display.nodes[node_name].get("label", node_name)
             # Use "data_type" instead of "shape"
-            data_type = G.nodes[node_name].get("data_type", "parameter")
+            data_type = graph_for_display.nodes[node_name].get("data_type", "parameter")
             style = DATA_TYPE_STYLES.get(data_type, {"shape": "oval", "fillcolor": "grey"})
 
             n.attr['shape'] = style["shape"]
-            n.attr['style'] = 'filled'
+            n.attr['style'] = style.get("style", "filled")
             n.attr['fillcolor'] = style["fillcolor"]
-            n.attr['label'] = display_label
+            n.attr['label'] = _wrap_graphviz_label(display_label, width=24 if data_type == "edge_label" else 36)
+            for attr_name in ("color", "fontcolor", "fontsize", "margin"):
+                if attr_name in style:
+                    n.attr[attr_name] = style[attr_name]
 
             if data_type == "operator":
                 n.attr['fontsize'] = '14'
@@ -1604,21 +1668,23 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
         for edge in A.edges():
             tail = edge[0]
             head = edge[1]
-            tail_data_type = G.nodes[tail].get("data_type", "parameter")
+            tail_data_type = graph_for_display.nodes[tail].get("data_type", "parameter")
             if tail_data_type == "function":
                 if not edge.attr.get("penwidth"):
                     edge.attr["penwidth"] = "3"
             elif tail_data_type in ("parameter", "value"):
                 if not edge.attr.get("penwidth"):
                     edge.attr["penwidth"] = "1"
+            elif tail_data_type == "edge_label":
+                if not edge.attr.get("penwidth"):
+                    edge.attr["penwidth"] = "2"
             else:
                 if not edge.attr.get("penwidth"):
                     edge.attr["penwidth"] = "3"
-            edge_label = G.edges[tail, head].get("label")
-            if edge_label:
-                edge.attr["label"] = edge_label
-                if not edge.attr.get("fontsize"):
-                    edge.attr["fontsize"] = "10"
+            edge.attr["label"] = ""
+            edge.attr["xlabel"] = ""
+            edge.attr["headlabel"] = ""
+            edge.attr["taillabel"] = ""
 
         A.graph_attr.update(
             rankdir="BT",
