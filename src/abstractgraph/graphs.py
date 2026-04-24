@@ -15,11 +15,32 @@ from abstractgraph.labels import (
     name_hash_label_function_factory,
     null_edge_function,
 )
+from abstractgraph.hashing import hash_graph
 
 try:
     import multiprocessing_on_dill as mp
 except Exception:
     import multiprocessing as mp
+
+
+SIMPLE_GRAPH_TYPES = (nx.Graph, nx.DiGraph)
+
+
+def is_simple_graph(obj: Any) -> bool:
+    """Return True for simple NetworkX Graph/DiGraph instances."""
+    return isinstance(obj, SIMPLE_GRAPH_TYPES) and not isinstance(obj, (nx.MultiGraph, nx.MultiDiGraph))
+
+
+def make_simple_graph(*, directed: bool = False) -> nx.Graph:
+    """Create an empty simple Graph/DiGraph."""
+    return nx.DiGraph() if directed else nx.Graph()
+
+
+def make_simple_graph_like(graph: Any, *, directed: Optional[bool] = None) -> nx.Graph:
+    """Create an empty simple graph matching the requested directedness."""
+    if directed is None:
+        directed = bool(getattr(graph, "is_directed", lambda: False)())
+    return make_simple_graph(directed=bool(directed))
 
 
 def _warn_deprecated(old_name: str, new_name: str) -> None:
@@ -71,11 +92,7 @@ def get_interpretation_label_to_mapped_subgraphs(
         if label is None or mapped_subgraph is None:
             continue
         if unique:
-            mapped_subgraph_hash = nx.weisfeiler_lehman_graph_hash(
-                mapped_subgraph,
-                node_attr="label",
-                edge_attr="label",
-            )
+            mapped_subgraph_hash = hash_graph(mapped_subgraph, nbits=31)
             if mapped_subgraph_hash in seen_hashes[label]:
                 continue
             seen_hashes[label].add(mapped_subgraph_hash)
@@ -102,8 +119,8 @@ class AbstractGraph:
         nbits: int = DEFAULT_NBITS,
     ) -> None:
         """Initialize an AbstractGraph."""
-        self.base_graph: nx.Graph = nx.Graph()
-        self.interpretation_graph: nx.Graph = nx.Graph()
+        self.base_graph: nx.Graph = make_simple_graph()
+        self.interpretation_graph: nx.Graph = make_simple_graph()
 
         self.label_function = (
             label_function
@@ -159,6 +176,8 @@ class AbstractGraph:
 
     def from_graph(self, graph: nx.Graph) -> "AbstractGraph":
         """Initialize the AbstractGraph from a given base graph."""
+        if not is_simple_graph(graph):
+            raise TypeError("AbstractGraph supports only simple nx.Graph / nx.DiGraph inputs.")
         self.base_graph = graph.copy()
         return self
 
@@ -336,6 +355,8 @@ class AbstractGraph:
             attribute_function=self.attribute_function,
             edge_function=self.edge_function,
         )
+        if nx.is_directed(self.base_graph) != nx.is_directed(other_base):
+            raise ValueError("Cannot add AbstractGraphs with different base-graph directedness.")
         new_qg.base_graph = nx.compose(self.base_graph, other_base)
         new_qg.interpretation_graph = nx.disjoint_union(self.interpretation_graph, other_interpretation)
         return new_qg
@@ -351,7 +372,7 @@ class AbstractGraph:
                 for key, value in data.items():
                     if key == "association" and "mapped_subgraph" in data:
                         continue
-                    if key in {"mapped_subgraph", "association"} and isinstance(value, nx.Graph):
+                    if key in {"mapped_subgraph", "association"} and is_simple_graph(value):
                         subgraph_str = graph_repr(value, indent=indent + 2)
                         attr_parts.append(f"{key}:\n{subgraph_str}")
                     else:
@@ -370,7 +391,7 @@ class AbstractGraph:
 
     def to_graph(self, connection_label: str = "abstract") -> nx.Graph:
         """Convert the AbstractGraph into a single NetworkX graph with integer node ids."""
-        graph_out = nx.Graph()
+        graph_out = make_simple_graph(directed=nx.is_directed(self.base_graph))
 
         base_nodes = list(self.base_graph.nodes())
         base_id_map = {orig_id: i for i, orig_id in enumerate(base_nodes)}
@@ -397,7 +418,7 @@ class AbstractGraph:
             graph_out.add_edge(interpretation_id_map[u], interpretation_id_map[v], **edata)
 
         for interpretation_node, data in self.interpretation_graph.nodes(data=True):
-            mapped_subgraph = get_mapped_subgraph(data) or nx.Graph()
+            mapped_subgraph = get_mapped_subgraph(data) or make_simple_graph()
             interpretation_node_id = interpretation_id_map[interpretation_node]
             for orig_base_id in mapped_subgraph.nodes():
                 if orig_base_id in base_id_map:

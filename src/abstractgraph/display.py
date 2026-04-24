@@ -17,7 +17,7 @@ from matplotlib.patches import Rectangle
 import hashlib
 from typing import Optional, Dict, Any, Tuple, List, Callable, Iterable, Union
 import math
-from abstractgraph.graphs import AbstractGraph
+from abstractgraph.graphs import AbstractGraph, is_simple_graph
 from abstractgraph.hashing import hash_graph
 
 _NETWORKX_GRAPH_TYPES = (nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph)
@@ -631,7 +631,7 @@ def display(
     abstract_edgecolors = []
     for _node, data in abstract_graph.interpretation_graph.nodes(data=True):
         mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
-        if isinstance(mapped_subgraph, nx.Graph) and mapped_subgraph.number_of_nodes() > 0:
+        if is_simple_graph(mapped_subgraph) and mapped_subgraph.number_of_nodes() > 0:
             abstract_edgecolors.append("black")
         else:
             abstract_edgecolors.append("white")

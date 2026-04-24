@@ -28,7 +28,12 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from itertools import combinations, product
 from networkx.algorithms.community import kernighan_lin_bisection
-from abstractgraph.graphs import AbstractGraph, get_mapped_subgraph
+from abstractgraph.graphs import (
+    AbstractGraph,
+    get_mapped_subgraph,
+    is_simple_graph,
+    make_simple_graph,
+)
 from abstractgraph.hashing import hash_set
 from abstractgraph.xml import operator_to_xml_string
 import random
@@ -102,6 +107,58 @@ def _get_add_include_self() -> bool:
         bool: True if add should include itself in the source chain.
     """
     return _ADD_INCLUDE_SELF.get()
+
+
+def _iter_adjacent_nodes(graph: nx.Graph, node: Any):
+    """Iterate adjacent nodes under weak-connectivity semantics for directed graphs."""
+    if nx.is_directed(graph):
+        seen = set()
+        for neighbor in graph.successors(node):
+            if neighbor not in seen:
+                seen.add(neighbor)
+                yield neighbor
+        for neighbor in graph.predecessors(node):
+            if neighbor not in seen:
+                seen.add(neighbor)
+                yield neighbor
+        return
+    yield from graph.neighbors(node)
+
+
+def _connected_components_view(graph: nx.Graph):
+    """Return connected components using weak connectivity for directed graphs."""
+    if nx.is_directed(graph):
+        return nx.weakly_connected_components(graph)
+    return nx.connected_components(graph)
+
+
+def _number_connected_components_view(graph: nx.Graph) -> int:
+    """Return component count under weak-connectivity semantics for directed graphs."""
+    if nx.is_directed(graph):
+        return int(nx.number_weakly_connected_components(graph))
+    return int(nx.number_connected_components(graph))
+
+
+def _is_connected_view(graph: nx.Graph) -> bool:
+    """Return connectivity under weak-connectivity semantics for directed graphs."""
+    if graph.number_of_nodes() == 0:
+        return True
+    if nx.is_directed(graph):
+        return bool(nx.is_weakly_connected(graph))
+    return bool(nx.is_connected(graph))
+
+
+def _cycle_node_sets(graph: nx.Graph) -> List[set]:
+    """Return simple cycles as node sets, direction-aware for DiGraph."""
+    if nx.is_directed(graph):
+        return [set(cycle) for cycle in nx.simple_cycles(graph)]
+    return [set(cycle) for cycle in nx.cycle_basis(graph)]
+
+
+def _empty_simple_graph_for(value: Any = None) -> nx.Graph:
+    """Return an empty simple graph matching the input directedness when possible."""
+    directed = bool(getattr(value, "is_directed", lambda: False)()) if value is not None else False
+    return make_simple_graph(directed=directed)
 
 
 def _operator_xml_string(op: Any) -> str:
@@ -197,7 +254,7 @@ def build_meta_from_function_context(exclude_keys: Tuple[str, ...] = ("abstract_
         source_chain_xml = source_function
     meta["source_chain"] = source_chain_xml
     parent_subgraph = values.get("subgraph")
-    if isinstance(parent_subgraph, nx.Graph):
+    if is_simple_graph(parent_subgraph):
         meta["parent_mapped_subgraph"] = parent_subgraph.copy()
     return meta
 
@@ -1001,10 +1058,7 @@ def random_part(
             induced = subgraph.subgraph(node_set)
             if induced.number_of_nodes() == 0:
                 continue
-            if induced.is_directed():
-                components = nx.connected_components(induced.to_undirected())
-            else:
-                components = nx.connected_components(induced)
+            components = _connected_components_view(induced)
             try:
                 largest = max(components, key=len)
             except ValueError:
@@ -1198,7 +1252,7 @@ def connected_component_decomposition_function(subgraph):
     components : list[set]
         List of node sets, one per connected component.
     """
-    components = list(nx.connected_components(subgraph))
+    components = list(_connected_components_view(subgraph))
     return components
 
 
@@ -1416,7 +1470,7 @@ def split_decomposition_function(subgraph, seed=0):
         list[set]: [set(part1), set(part2)] on success; otherwise [set(all_nodes)].
     """
     # If subgraph is not connected, we simply return the whole node set.
-    if not nx.is_connected(subgraph):
+    if not _is_connected_view(subgraph):
         return [set(subgraph.nodes())]
     
     try:
@@ -1517,14 +1571,9 @@ def split(
     for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
         def _connected_parts_from_nodes(nodes):
             induced = subgraph.subgraph(nodes)
-            if nx.is_directed(subgraph):
-                return [set(c) for c in nx.weakly_connected_components(induced)]
-            return [set(c) for c in nx.connected_components(induced)]
+            return [set(c) for c in _connected_components_view(induced)]
 
-        if nx.is_directed(subgraph):
-            parts = [set(c) for c in nx.weakly_connected_components(subgraph)]
-        else:
-            parts = [set(c) for c in nx.connected_components(subgraph)]
+        parts = [set(c) for c in _connected_components_view(subgraph)]
         if not parts:
             parts = [set()]
 
@@ -1712,6 +1761,12 @@ def get_edges_from_cycle(cycle):
 def get_cycle_basis_edges(g):
     """Return the list of edges belonging to all cycles in the graph."""
     ebunch = []
+    if nx.is_directed(g):
+        for cycle in nx.simple_cycles(g):
+            for i, _ in enumerate(cycle):
+                j = (i + 1) % len(cycle)
+                ebunch.append((cycle[i], cycle[j]))
+        return ebunch
     cs = nx.cycle_basis(g)
     for c in cs:
         ebunch += list(get_edges_from_cycle(c))
@@ -1786,16 +1841,13 @@ def _mapped_subgraph_group_key(subgraph):
 
 def cycle_decomposition_function(subgraph):
     """Return node sets corresponding to all simple cycles in the subgraph."""
-    cs = nx.cycle_basis(subgraph)
-    cycle_components = list(map(set, cs))
-    return cycle_components
+    return _cycle_node_sets(subgraph)
 
 def non_cycle_decomposition_function(subgraph):
     """Return node sets of acyclic connected components after removing cycle edges."""
-    cs = nx.cycle_basis(subgraph)
     cycle_ebunch = get_cycle_basis_edges(subgraph)
     g2 = edge_complement_subgraph(subgraph, cycle_ebunch)
-    non_cycle_components = nx.connected_components(g2)
+    non_cycle_components = _connected_components_view(g2)
     non_cycle_components = [c for c in non_cycle_components if len(c) >= 2]
     non_cycle_components = list(map(set, non_cycle_components))
     return non_cycle_components
@@ -2158,7 +2210,7 @@ def graphlet_decomposition_function(subgraph, radius=1, min_number_of_nodes=1, m
             ego_graph = nx.ego_graph(subgraph, u, radius=radius)
             for sub_nodes in itertools.combinations(ego_graph.nodes(), size):
                 sub_subgraph = ego_graph.subgraph(sub_nodes)
-                if nx.is_connected(sub_subgraph):
+                if _is_connected_view(sub_subgraph):
                     components.append(tuple(sorted(set(sub_nodes))))
     components = list(set(components))
     return components
@@ -2753,12 +2805,7 @@ def betweenness_centrality_hop_split_decomposition_function(subgraph, n_hops=1):
     ranked_ids = sorted(n_dict, key=lambda x: n_dict[x], reverse=True)
 
     def iter_connected_components(g):
-        if nx.is_directed(g):
-            for c in nx.weakly_connected_components(g):
-                yield c
-        else:
-            for c in nx.connected_components(g):
-                yield c
+        yield from _connected_components_view(g)
 
     components = []
     explored = set()
@@ -2834,7 +2881,7 @@ def _count_boundary_nodes(subgraph: nx.Graph, part_nodes: set) -> int:
     """
     boundary = 0
     for node_id in part_nodes:
-        if any(neigh not in part_nodes for neigh in subgraph.neighbors(node_id)):
+        if any(neigh not in part_nodes for neigh in _iter_adjacent_nodes(subgraph, node_id)):
             boundary += 1
     return int(boundary)
 
@@ -2958,7 +3005,7 @@ def _connected_fallback_bisect(
     while head < len(queue) and len(visited) < target:
         u = queue[head]
         head += 1
-        for v in subgraph.neighbors(u):
+        for v in _iter_adjacent_nodes(subgraph, u):
             if v in visited:
                 continue
             visited.add(v)
@@ -2972,13 +3019,13 @@ def _connected_fallback_bisect(
         return None
 
     # Keep each side connected by taking largest CC if needed.
-    if not nx.is_connected(subgraph.subgraph(part_a)):
-        ccs = list(nx.connected_components(subgraph.subgraph(part_a)))
+    if not _is_connected_view(subgraph.subgraph(part_a)):
+        ccs = list(_connected_components_view(subgraph.subgraph(part_a)))
         ccs.sort(key=len, reverse=True)
         part_a = set(ccs[0])
         part_b = set(subgraph.nodes()) - part_a
-    if not part_b or not nx.is_connected(subgraph.subgraph(part_b)):
-        ccs = list(nx.connected_components(subgraph.subgraph(part_b)))
+    if not part_b or not _is_connected_view(subgraph.subgraph(part_b)):
+        ccs = list(_connected_components_view(subgraph.subgraph(part_b)))
         if not ccs:
             return None
         ccs.sort(key=len, reverse=True)
@@ -3025,11 +3072,11 @@ def _inject_overlap_nodes(
         return a, b
 
     # Nodes on cut boundary that can be duplicated across parts.
-    a_boundary = [u for u in a if any(v in b for v in subgraph.neighbors(u))]
-    b_boundary = [v for v in b if any(u in a for u in subgraph.neighbors(v))]
+    a_boundary = [u for u in a if any(v in b for v in _iter_adjacent_nodes(subgraph, u))]
+    b_boundary = [v for v in b if any(u in a for u in _iter_adjacent_nodes(subgraph, v))]
     # Prefer stronger bridge nodes first.
-    a_boundary.sort(key=lambda u: sum(1 for v in subgraph.neighbors(u) if v in b), reverse=True)
-    b_boundary.sort(key=lambda v: sum(1 for u in subgraph.neighbors(v) if u in a), reverse=True)
+    a_boundary.sort(key=lambda u: sum(1 for v in _iter_adjacent_nodes(subgraph, u) if v in b), reverse=True)
+    b_boundary.sort(key=lambda v: sum(1 for u in _iter_adjacent_nodes(subgraph, v) if u in a), reverse=True)
 
     for u in a_boundary:
         if len(overlap) >= need:
@@ -3087,7 +3134,7 @@ def _count_attachment_edges(subgraph: nx.Graph, part_nodes: set) -> int:
     inside = set(part_nodes)
     attachment = 0
     for u in inside:
-        for v in subgraph.neighbors(u):
+        for v in _iter_adjacent_nodes(subgraph, u):
             if v not in inside:
                 attachment += 1
     return int(attachment)
@@ -3156,7 +3203,7 @@ def _best_low_attachment_split(
     for u, v in nx.bridges(subgraph):
         g = subgraph.copy()
         g.remove_edge(u, v)
-        for cc in nx.connected_components(g):
+        for cc in _connected_components_view(g):
             _consider_component(set(cc))
 
     # 2-edge attachments: remove edge pairs (bounded).
@@ -3173,9 +3220,9 @@ def _best_low_attachment_split(
                 g.remove_edge(*e1)
             if g.has_edge(*e2):
                 g.remove_edge(*e2)
-            if nx.is_connected(g):
+            if _is_connected_view(g):
                 continue
-            for cc in nx.connected_components(g):
+            for cc in _connected_components_view(g):
                 _consider_component(set(cc))
 
     if not candidates:
@@ -3244,7 +3291,7 @@ def low_cut_partition_decomposition_function(
 
     components = []
     worklist = []
-    for comp_nodes in nx.connected_components(subgraph):
+    for comp_nodes in _connected_components_view(subgraph):
         worklist.append((set(comp_nodes), 0))
 
     while worklist:
@@ -3318,14 +3365,14 @@ def low_cut_partition_decomposition_function(
 
         for child in (part_a, part_b):
             child_graph = local.subgraph(child)
-            for cc in nx.connected_components(child_graph):
+            for cc in _connected_components_view(child_graph):
                 worklist.append((set(cc), depth + 1))
 
     # Final safety pass: keep connected chunks only.
     final_components = []
     for nodes in components:
         local = subgraph.subgraph(nodes)
-        for cc in nx.connected_components(local):
+        for cc in _connected_components_view(local):
             final_components.append(list(cc))
 
     if not bool(strict_max_boundary):
@@ -3610,8 +3657,8 @@ def remove_redundant_associations(
     assoc_cache = {}
     for old_id, data in image_nodes_data:
         mapped_subgraph = get_mapped_subgraph(data)
-        if not isinstance(mapped_subgraph, nx.Graph):
-            mapped_subgraph = nx.Graph()
+        if not is_simple_graph(mapped_subgraph):
+            mapped_subgraph = _empty_simple_graph_for(abstract_graph.base_graph)
         nodes = set(mapped_subgraph.nodes())
         edges = {edge_key(e) for e in mapped_subgraph.edges()}
         assoc_cache[old_id] = (mapped_subgraph, nodes, edges, data)
@@ -3745,7 +3792,7 @@ def intersection(
                 continue
             induced = abstract_graph.base_graph.subgraph(inter_nodes)
             try:
-                cc_count = len(list(nx.connected_components(induced)))
+                cc_count = _number_connected_components_view(induced)
             except Exception:
                 cc_count = 0
             if cc_count != 1:
@@ -4220,7 +4267,7 @@ def filter_by_number_of_connected_components(
     )
 
     for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        cc = list(nx.connected_components(subgraph))
+        cc = list(_connected_components_view(subgraph))
         if min(number_of_components) <= len(cc) <= max(number_of_components):
             out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(subgraph.nodes())
     
@@ -5113,7 +5160,7 @@ def binary_intersection(
                     continue
                 induced = first_abstract_graph.base_graph.subgraph(inter_nodes)
                 try:
-                    cc_count = len(list(nx.connected_components(induced)))
+                    cc_count = _number_connected_components_view(induced)
                 except Exception:
                     cc_count = 0
                 if cc_count != 1:

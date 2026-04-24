@@ -42,7 +42,6 @@ Notes and limitations
   collision tolerance.
 """
 
-import networkx as nx
 import hashlib
 import json
 import math
@@ -50,10 +49,51 @@ from base64 import b64encode
 from collections import defaultdict
 from typing import Any, Optional, List, Tuple, Dict, Union
 import numpy as np
+import networkx as nx
 try:
     import multiprocessing_on_dill as mp
 except Exception:
     import multiprocessing as mp
+
+
+def _edge_orientation_tag(graph: nx.Graph, u: Any, v: Any) -> str:
+    """Return a stable orientation tag for one incident edge."""
+    if not nx.is_directed(graph):
+        return "undirected"
+    return "out"
+
+
+def _iter_incident_edge_payloads(graph: nx.Graph, node_idx: Any) -> List[tuple[str, Any, Any]]:
+    """Return incident edge payloads with explicit direction tags."""
+    payloads: List[tuple[str, Any, Any]] = []
+    if nx.is_directed(graph):
+        for neighbor_idx in graph.successors(node_idx):
+            payloads.append(
+                (
+                    "out",
+                    graph.nodes[neighbor_idx].get("label", ""),
+                    graph.edges[node_idx, neighbor_idx].get("label", ""),
+                )
+            )
+        for neighbor_idx in graph.predecessors(node_idx):
+            payloads.append(
+                (
+                    "in",
+                    graph.nodes[neighbor_idx].get("label", ""),
+                    graph.edges[neighbor_idx, node_idx].get("label", ""),
+                )
+            )
+        return payloads
+
+    for neighbor_idx in graph.neighbors(node_idx):
+        payloads.append(
+            (
+                "undirected",
+                graph.nodes[neighbor_idx].get("label", ""),
+                graph.edges[node_idx, neighbor_idx].get("label", ""),
+            )
+        )
+    return payloads
 
 
 def canonicalize(value: Any) -> Any:
@@ -237,26 +277,17 @@ def hash_node(node_idx: int, graph: nx.Graph) -> int:
     # Initialize a list to store hashes related to the node's neighborhood.
     neighborhood_hashes = []
     
-    # Iterate over all neighbors of the current node.
-    for neighbor_idx in graph.neighbors(node_idx):
-        # Retrieve the neighbor's label; default to an empty string if not present.
-        neighbor_label = graph.nodes[neighbor_idx].get('label', '')
-        # Generate a consistent hash for the neighbor's label.
-        neighbor_label_hash = hash_value(neighbor_label)
-        
-        # Retrieve the label of the edge connecting the current node and its neighbor.
-        # Default to an empty string if the edge doesn't have a 'label' attribute.
-        edge_label = graph.edges[node_idx, neighbor_idx].get('label', '')
-        # Generate a consistent hash for the edge's label.
-        edge_label_hash = hash_value(edge_label)
-        
-        # Combine the neighbor's label hash and the edge's label hash into a list.
-        combined_hashes = [neighbor_label_hash, edge_label_hash]
-        # Generate a consistent hash for the combined list using the hash_set function.
-        combined_hash = hash_set(combined_hashes)
-        
-        # Append the combined hash to the neighborhood_hashes list.
-        neighborhood_hashes.append(combined_hash)
+    # Track edge direction explicitly so reversed arcs hash differently.
+    for direction_tag, neighbor_label, edge_label in _iter_incident_edge_payloads(graph, node_idx):
+        neighborhood_hashes.append(
+            hash_sequence(
+                [
+                    hash_value(direction_tag),
+                    hash_value(neighbor_label),
+                    hash_value(edge_label),
+                ]
+            )
+        )
     
     # After processing all neighbors, combine all neighborhood-related hashes.
     # The hash_set function ensures that the combination is order-independent.
@@ -375,16 +406,27 @@ def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
     hashes_list = []
     node_labels_set_hash = compute_node_labels_set_hash(graph)
     hashes_list.append(node_labels_set_hash)
+    hashes_list.append(hash_value("directed" if nx.is_directed(graph) else "undirected"))
     
     # Iterate over each edge in the graph
     for u, v in graph.edges():
         # Retrieve and hash the edge's label
         edge_label = graph.edges[u, v].get('label', '')
         edge_label_hash = hash_value(edge_label)
-        # Combine the rooted subgraph hashes of both nodes connected by the edge
-        combined_node_hashes = hash_set([rooted_subgraph_hashes[u], rooted_subgraph_hashes[v]])
-        # Hash the combined node hashes along with the edge label hash
-        combined_edge_hash = hash_sequence([combined_node_hashes, edge_label_hash])
+        if nx.is_directed(graph):
+            combined_edge_hash = hash_sequence(
+                [
+                    hash_value("directed_edge"),
+                    rooted_subgraph_hashes[u],
+                    rooted_subgraph_hashes[v],
+                    edge_label_hash,
+                ]
+            )
+        else:
+            combined_node_hashes = hash_set([rooted_subgraph_hashes[u], rooted_subgraph_hashes[v]])
+            combined_edge_hash = hash_sequence(
+                [hash_value("undirected_edge"), combined_node_hashes, edge_label_hash]
+            )
         # Append the combined edge hash to the list
         hashes_list.append(combined_edge_hash)
 

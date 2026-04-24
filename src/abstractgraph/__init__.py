@@ -15,6 +15,9 @@ from abstractgraph.graphs import (
     get_mapped_subgraph,
     graph_to_abstract_graph,
     graphs_to_abstract_graphs,
+    is_simple_graph,
+    make_simple_graph,
+    make_simple_graph_like,
     set_mapped_subgraph,
 )
 from abstractgraph.hashing import hash_bounded, hash_graph, hash_sequence, hash_set, hash_value
@@ -41,6 +44,9 @@ __all__ = [
     "get_mapped_subgraph",
     "graph_to_abstract_graph",
     "graphs_to_abstract_graphs",
+    "is_simple_graph",
+    "make_simple_graph",
+    "make_simple_graph_like",
     "set_mapped_subgraph",
     "hash_graph",
     "hash_bounded",
