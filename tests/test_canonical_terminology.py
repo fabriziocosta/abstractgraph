@@ -201,6 +201,18 @@ def test_directed_graph_to_abstract_graph_uses_weak_connectivity() -> None:
     assert set(mapped[0].nodes()) == {0, 1, 2}
 
 
+def test_graph_to_abstract_graph_preserves_edge_label_display_preference() -> None:
+    graph = nx.Graph()
+    graph.add_node(0, label="a", attribute=np.array([1.0]))
+    graph.add_node(1, label="b", attribute=np.array([1.0]))
+    graph.add_edge(0, 1, label="rel")
+
+    ag = graph_to_abstract_graph(graph, decomposition_function=ops.edge(), nbits=6, edge_labels=True)
+
+    assert ag.display_edge_labels is True
+    assert ag.copy().display_edge_labels is True
+
+
 def test_local_edge_complement_preserves_directed_orientation() -> None:
     graph = nx.DiGraph()
     graph.add_nodes_from(

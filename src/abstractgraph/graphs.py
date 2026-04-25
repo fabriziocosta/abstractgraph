@@ -108,6 +108,7 @@ class AbstractGraph:
         """Initialize an AbstractGraph."""
         self.base_graph: nx.Graph = make_simple_graph()
         self.interpretation_graph: nx.Graph = make_simple_graph()
+        self.display_edge_labels = bool(getattr(abstract_graph, "display_edge_labels", False))
 
         self.label_function = (
             label_function
@@ -139,6 +140,7 @@ class AbstractGraph:
         )
         new.base_graph = self.base_graph.copy()
         new.interpretation_graph = self.interpretation_graph.copy()
+        new.display_edge_labels = self.display_edge_labels
         return new
 
     def from_graph(self, graph: nx.Graph) -> "AbstractGraph":
@@ -152,6 +154,7 @@ class AbstractGraph:
         """Copy the base and interpretation graphs from another AbstractGraph."""
         self.base_graph = abstract_graph.base_graph.copy()
         self.interpretation_graph = abstract_graph.interpretation_graph.copy()
+        self.display_edge_labels = bool(getattr(abstract_graph, "display_edge_labels", False))
         return self
 
     def _add_interpretation_node(self, mapped_subgraph: nx.Graph, meta: Optional[dict] = None) -> int:
@@ -463,6 +466,7 @@ def graph_to_abstract_graph(
     nbits: int,
     label_function: Optional[Callable[[dict], Any]] = None,
     label_mode: str = "graph_hash",
+    edge_labels: bool = False,
 ) -> AbstractGraph:
     """Build and update an AbstractGraph from a base graph and decomposition."""
     if label_function is None:
@@ -475,14 +479,15 @@ def graph_to_abstract_graph(
     abstract_graph = AbstractGraph(graph=graph, label_function=label_function)
     abstract_graph.create_default_interpretation_node()
     abstract_graph = decomposition_function(abstract_graph)
+    abstract_graph.display_edge_labels = bool(edge_labels)
     abstract_graph.update()
     return abstract_graph
 
 
 def _graph_to_abstract_graph_worker(args):
     """Worker wrapper for multiprocessing graph_to_abstract_graph."""
-    graph, decomposition_function, nbits, label_function, label_mode = args
-    return graph_to_abstract_graph(graph, decomposition_function, nbits, label_function, label_mode)
+    graph, decomposition_function, nbits, label_function, label_mode, edge_labels = args
+    return graph_to_abstract_graph(graph, decomposition_function, nbits, label_function, label_mode, edge_labels)
 
 
 def _graphs_to_abstract_graphs(
@@ -491,11 +496,14 @@ def _graphs_to_abstract_graphs(
     nbits: int,
     label_function: Optional[Callable[[dict], Any]] = None,
     label_mode: str = "graph_hash",
+    edge_labels: bool = False,
 ) -> Sequence[AbstractGraph]:
     """Convert a sequence of graphs to AbstractGraphs serially."""
     abstract_graphs = []
     for graph in graphs:
-        abstract_graphs.append(graph_to_abstract_graph(graph, decomposition_function, nbits, label_function, label_mode))
+        abstract_graphs.append(
+            graph_to_abstract_graph(graph, decomposition_function, nbits, label_function, label_mode, edge_labels)
+        )
     return abstract_graphs
 
 
@@ -506,14 +514,15 @@ def graphs_to_abstract_graphs(
     n_jobs: int = -1,
     label_function: Optional[Callable[[dict], Any]] = None,
     label_mode: str = "graph_hash",
+    edge_labels: bool = False,
 ) -> Sequence[AbstractGraph]:
     """Parallel version of graphs_to_abstract_graphs."""
     if n_jobs in (None, 1):
-        return _graphs_to_abstract_graphs(graphs, decomposition_function, nbits, label_function, label_mode)
+        return _graphs_to_abstract_graphs(graphs, decomposition_function, nbits, label_function, label_mode, edge_labels)
     if n_jobs < 0:
         n_jobs = max(1, mp.cpu_count())
     else:
         n_jobs = max(1, int(n_jobs))
     with mp.Pool(processes=n_jobs) as pool:
-        args = [(graph, decomposition_function, nbits, label_function, label_mode) for graph in graphs]
+        args = [(graph, decomposition_function, nbits, label_function, label_mode, edge_labels) for graph in graphs]
         return pool.map(_graph_to_abstract_graph_worker, args)

@@ -571,7 +571,10 @@ def display(
     connection_style: Optional[Dict[str, Any]] = None,
     size: Tuple[int, int] = (5, 4),
     ax: Optional[plt.Axes] = None, # Use plt.Axes for type hint
-    show_legend: bool = False
+    show_legend: bool = False,
+    edge_labels: Optional[bool] = None,
+    edge_label_attr: str = 'label',
+    edge_label_font_size: int = 6,
 ) -> Optional[Union[plt.Axes, Figure]]:
     """
     Visualizes the full nested structure of a AbstractGraph using display_graph.
@@ -591,6 +594,10 @@ def display(
         size: The figure size as a tuple (width, height) if `ax` is None.
         ax: A Matplotlib axis to draw on. If None, a new figure and axis are created.
         show_legend: If True, displays a legend.
+        edge_labels: If True, draw edge labels on the base and interpretation graphs.
+            If None, use the AbstractGraph display preference.
+        edge_label_attr: Edge attribute name to use for labels.
+        edge_label_font_size: Font size for edge labels.
 
     Returns:
         The Matplotlib axis containing the visualization (or a Figure if multiple graphs are provided).
@@ -605,8 +612,13 @@ def display(
                 size=size,
                 show=False,
                 show_legend=show_legend,
+                edge_labels=edge_labels,
+                edge_label_attr=edge_label_attr,
+                edge_label_font_size=edge_label_font_size,
             )
         raise TypeError("display expects an AbstractGraph or a list of graphs.")
+    if edge_labels is None:
+        edge_labels = bool(getattr(abstract_graph, "display_edge_labels", False))
     # Set default styles (can be simplified if defaults are handled in display_graph)
     if base_style is None:
         base_style = {
@@ -688,6 +700,9 @@ def display(
         style=base_style,
         pos=pos_base,
         offset=(0, 0), # Explicitly no offset
+        edge_labels=edge_labels,
+        edge_label_attr=edge_label_attr,
+        edge_label_font_size=edge_label_font_size,
         fit_viewport=False,
     )
 
@@ -705,6 +720,9 @@ def display(
         style={**abstract_style, "node_edgecolors": abstract_edgecolors},
         pos=pos_abstract, # Pass original positions
         offset=(x_offset, 0), # Apply offset
+        edge_labels=edge_labels,
+        edge_label_attr=edge_label_attr,
+        edge_label_font_size=edge_label_font_size,
         fit_viewport=False,
     )
 
@@ -796,7 +814,7 @@ def display_graphs(
     node_labels: bool = False,
     node_label_attr: str = 'label',
     node_label_font_size: int = 8,
-    edge_labels: bool = False,
+    edge_labels: Optional[bool] = None,
     edge_label_attr: str = 'label',
     edge_label_font_size: int = 7,
 ):
@@ -818,7 +836,8 @@ def display_graphs(
         node_labels: If True, draw node labels for each graph.
         node_label_attr: Node attribute name to use for labels (fallback to node id).
         node_label_font_size: Font size for node labels.
-        edge_labels: If True, draw edge labels for each graph.
+        edge_labels: If True, draw edge labels for each graph. If None, AbstractGraph
+            entries use their own display preference and NetworkX entries skip labels.
         edge_label_attr: Edge attribute name to use for labels (edges missing it are skipped).
         edge_label_font_size: Font size for edge labels.
 
@@ -860,6 +879,9 @@ def display_graphs(
                     connection_style=connection_style,
                     ax=ax,
                     show_legend=show_legend,
+                    edge_labels=edge_labels,
+                    edge_label_attr=edge_label_attr,
+                    edge_label_font_size=edge_label_font_size,
                 )
             else:
                 display_graph(
@@ -870,7 +892,7 @@ def display_graphs(
                     node_labels=node_labels,
                     node_label_attr=node_label_attr,
                     node_label_font_size=node_label_font_size,
-                    edge_labels=edge_labels,
+                    edge_labels=bool(edge_labels),
                     edge_label_attr=edge_label_attr,
                     edge_label_font_size=edge_label_font_size,
                 )
@@ -1114,6 +1136,9 @@ def display_mappings(
     n_nodes_for_larger_size: int = 20,
     larger_inner_plot_size: Tuple[float, float] = (5.0, 5.0),
     fixed_inner_inset_px: float = 14.0,
+    edge_labels: Optional[bool] = None,
+    edge_label_attr: str = 'label',
+    edge_label_font_size: int = 6,
 ) -> None:
     """
     Visualize mapping instances grouped by image-node label.
@@ -1136,6 +1161,10 @@ def display_mappings(
             size unchanged.
         fixed_inner_inset_px: Fixed inset in pixels used for the inner bbox and
             matching graph padding.
+        edge_labels: If True, draw edge labels on mapped subgraphs. If None,
+            use the AbstractGraph display preference.
+        edge_label_attr: Edge attribute name to use for labels.
+        edge_label_font_size: Font size for edge labels.
 
     Returns:
         None.
@@ -1143,6 +1172,8 @@ def display_mappings(
     if abstract_graph is None or abstract_graph.interpretation_graph is None or len(abstract_graph.interpretation_graph.nodes) == 0:
         print("[display_mappings] Empty abstract graph — nothing to display.")
         return
+    if edge_labels is None:
+        edge_labels = bool(getattr(abstract_graph, "display_edge_labels", False))
 
     def _operator_text_from_meta(node_data: Dict[str, Any]) -> Optional[str]:
         meta = node_data.get("meta", {})
@@ -1239,7 +1270,14 @@ def display_mappings(
     for i, (label, subgraph, copy_count, operator_text) in enumerate(expanded_cells):
         ax = axes[i]
         style_for_subgraph = dense_subgraph_style if subgraph.number_of_nodes() >= n_nodes_for_larger_size else subgraph_style
-        display_graph(subgraph, ax=ax, style=style_for_subgraph)
+        display_graph(
+            subgraph,
+            ax=ax,
+            style=style_for_subgraph,
+            edge_labels=edge_labels,
+            edge_label_attr=edge_label_attr,
+            edge_label_font_size=edge_label_font_size,
+        )
         ax.axis("off")
         label_to_cells.setdefault(label, []).append(i)
         cell_copy_counts[i] = copy_count
@@ -1264,7 +1302,14 @@ def display_mappings(
             **style_for_subgraph,
             "content_inset_px": fixed_inner_inset_px,
         }
-        display_graph(subgraph, ax=ax, style=final_style)
+        display_graph(
+            subgraph,
+            ax=ax,
+            style=final_style,
+            edge_labels=edge_labels,
+            edge_label_attr=edge_label_attr,
+            edge_label_font_size=edge_label_font_size,
+        )
         ax.axis("off")
 
     show_operator_footer = getattr(getattr(abstract_graph, "label_function", None), "label_mode", None) == "operator_hash"
