@@ -359,6 +359,211 @@ def build_meta_from_function_context(exclude_keys: Tuple[str, ...] = ("abstract_
     return meta
 
 
+def _new_like_abstract_graph(abstract_graph: 'AbstractGraph') -> 'AbstractGraph':
+    """Create an empty output AbstractGraph preserving the input graph functions."""
+    return AbstractGraph(
+        graph=abstract_graph.base_graph,
+        label_function=abstract_graph.label_function,
+        attribute_function=abstract_graph.attribute_function,
+        edge_function=abstract_graph.edge_function,
+    )
+
+
+def _operator_name(operator: Callable) -> str:
+    """Return a stable display name for plain or curried operators."""
+    for candidate in (
+        operator,
+        getattr(operator, "func", None),
+        getattr(getattr(operator, "_partial", None), "func", None),
+    ):
+        name = getattr(candidate, "__name__", None)
+        if name is not None:
+            return name
+    return operator.__class__.__name__
+
+
+def _require_component_list(value: Any, decomposition_function: Callable) -> List[Any]:
+    """Require decomposition functions to return concrete lists, not iterators."""
+    if not isinstance(value, list):
+        name = getattr(decomposition_function, "__name__", decomposition_function.__class__.__name__)
+        raise TypeError(
+            f"{name} must return a list of components; got {type(value).__name__}."
+        )
+    return value
+
+
+def _build_operator_meta(
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]],
+    parent_mapped_subgraph: Optional[nx.Graph] = None,
+) -> Dict[str, Any]:
+    """Build explicit provenance metadata for scaffolded operators."""
+    source_function = _operator_name(source_operator)
+    meta = {
+        "source_function": source_function,
+        "params": dict(params or {}),
+        "source_chain": _get_source_chain_xml() or source_function,
+    }
+    if is_simple_graph(parent_mapped_subgraph):
+        meta["parent_mapped_subgraph"] = parent_mapped_subgraph.copy()
+    return meta
+
+
+def _materialize_components(
+    out_abstract_graph: 'AbstractGraph',
+    components: List[Any],
+    *,
+    materialization: str,
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]],
+    parent_mapped_subgraph: Optional[nx.Graph],
+    skip_empty: bool,
+) -> None:
+    """Create interpretation nodes from concrete node or edge components."""
+    for component in components:
+        if skip_empty:
+            component = list(component)
+            if not component:
+                continue
+        meta = _build_operator_meta(
+            source_operator,
+            params,
+            parent_mapped_subgraph=parent_mapped_subgraph,
+        )
+        if materialization == "node":
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
+                component,
+                meta=meta,
+            )
+        elif materialization == "edge":
+            out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
+                component,
+                meta=meta,
+            )
+        else:
+            raise ValueError(f"Unknown materialization: {materialization!r}")
+
+
+def apply_local_node_decomposition(
+    abstract_graph: 'AbstractGraph',
+    decomposition_function: Callable[[nx.Graph], List[Any]],
+    *,
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]] = None,
+    skip_empty: bool = False,
+) -> 'AbstractGraph':
+    """Apply a per-mapped-subgraph node-set decomposition.
+
+    The decomposition function must return a concrete list. Each list item is
+    materialized as a node-induced mapped subgraph.
+    """
+    _validate_directed_support(source_operator, abstract_graph)
+    out_abstract_graph = _new_like_abstract_graph(abstract_graph)
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+        components = _require_component_list(
+            decomposition_function(subgraph),
+            decomposition_function,
+        )
+        _materialize_components(
+            out_abstract_graph,
+            components,
+            materialization="node",
+            source_operator=source_operator,
+            params=params,
+            parent_mapped_subgraph=subgraph,
+            skip_empty=skip_empty,
+        )
+    return out_abstract_graph
+
+
+def apply_local_edge_decomposition(
+    abstract_graph: 'AbstractGraph',
+    decomposition_function: Callable[[nx.Graph], List[Any]],
+    *,
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]] = None,
+    skip_empty: bool = False,
+) -> 'AbstractGraph':
+    """Apply a per-mapped-subgraph edge-set decomposition.
+
+    The decomposition function must return a concrete list. Each list item is
+    materialized as an edge-induced mapped subgraph.
+    """
+    _validate_directed_support(source_operator, abstract_graph)
+    out_abstract_graph = _new_like_abstract_graph(abstract_graph)
+    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+        components = _require_component_list(
+            decomposition_function(subgraph),
+            decomposition_function,
+        )
+        _materialize_components(
+            out_abstract_graph,
+            components,
+            materialization="edge",
+            source_operator=source_operator,
+            params=params,
+            parent_mapped_subgraph=subgraph,
+            skip_empty=skip_empty,
+        )
+    return out_abstract_graph
+
+
+def apply_global_node_decomposition(
+    abstract_graph: 'AbstractGraph',
+    decomposition_function: Callable[[List[nx.Graph], nx.Graph], List[Any]],
+    *,
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]] = None,
+    skip_empty: bool = False,
+) -> 'AbstractGraph':
+    """Apply a whole-interpretation node-set decomposition."""
+    _validate_directed_support(source_operator, abstract_graph)
+    out_abstract_graph = _new_like_abstract_graph(abstract_graph)
+    subgraphs = list(abstract_graph.get_interpretation_nodes_mapped_subgraphs())
+    components = _require_component_list(
+        decomposition_function(subgraphs, abstract_graph.base_graph),
+        decomposition_function,
+    )
+    _materialize_components(
+        out_abstract_graph,
+        components,
+        materialization="node",
+        source_operator=source_operator,
+        params=params,
+        parent_mapped_subgraph=None,
+        skip_empty=skip_empty,
+    )
+    return out_abstract_graph
+
+
+def apply_global_edge_decomposition(
+    abstract_graph: 'AbstractGraph',
+    decomposition_function: Callable[[List[nx.Graph], nx.Graph], List[Any]],
+    *,
+    source_operator: Callable,
+    params: Optional[Dict[str, Any]] = None,
+    skip_empty: bool = False,
+) -> 'AbstractGraph':
+    """Apply a whole-interpretation edge-set decomposition."""
+    _validate_directed_support(source_operator, abstract_graph)
+    out_abstract_graph = _new_like_abstract_graph(abstract_graph)
+    subgraphs = list(abstract_graph.get_interpretation_nodes_mapped_subgraphs())
+    components = _require_component_list(
+        decomposition_function(subgraphs, abstract_graph.base_graph),
+        decomposition_function,
+    )
+    _materialize_components(
+        out_abstract_graph,
+        components,
+        materialization="edge",
+        source_operator=source_operator,
+        params=params,
+        parent_mapped_subgraph=None,
+        skip_empty=skip_empty,
+    )
+    return out_abstract_graph
+
+
 #====================================================================================================
 # HIGHER ORDER OPERATORS
 #====================================================================================================
@@ -1538,26 +1743,16 @@ def degree(
         - Explosion risk is low, but many singleton sets can be produced if graph is large.
     """
     value = value_to_2tuple(value)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = degree_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: degree_decomposition_function(
             subgraph,
             min_degree=min(value),
-            max_degree=max(value)
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+            max_degree=max(value),
+        ),
+        source_operator=degree,
+        params={"value": value},
+    )
 
 
 #--------------------------------------------------------------------------------
@@ -3645,31 +3840,19 @@ def merge(
         - If mapped subgraphs are empty, creates a single empty interpretation node.
         - `use_edges=True` produces edges but may result in disconnected node sets.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
     if use_edges:
-        component = []
-        for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-            component.extend(subgraph.edges())
-        out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
-            component,
-            meta=build_meta_from_function_context()
+        return apply_global_edge_decomposition(
+            abstract_graph,
+            lambda subgraphs, base_graph: [[edge for subgraph in subgraphs for edge in subgraph.edges()]],
+            source_operator=merge,
+            params={"use_edges": use_edges},
         )
-    else:
-        component = []
-        for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-            component.extend(subgraph.nodes())
-        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-            component,
-            meta=build_meta_from_function_context()
-        )
-    
-    return out_abstract_graph
+    return apply_global_node_decomposition(
+        abstract_graph,
+        lambda subgraphs, base_graph: [[node for subgraph in subgraphs for node in subgraph.nodes()]],
+        source_operator=merge,
+        params={"use_edges": use_edges},
+    )
 
 #--------------------------------------------------------------------------------
 @curry

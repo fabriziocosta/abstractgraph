@@ -49,6 +49,80 @@ df = forward_compose(
 ag = graph_to_abstract_graph(graph, decomposition_function=df, nbits=12)
 ```
 
+## Writing custom operators
+
+Custom operators can use scaffold helpers when they follow one of the common
+decomposition shapes. The helper name makes two choices explicit:
+
+- `local` vs `global`
+  Local decompositions process one mapped subgraph at a time. Global
+  decompositions receive the full list of current mapped subgraphs.
+- `node` vs `edge`
+  Node decompositions create node-induced mapped subgraphs. Edge decompositions
+  create edge-induced mapped subgraphs, preserving the selected edge set instead
+  of adding every edge among the selected nodes.
+
+The public helpers are:
+
+```python
+apply_local_node_decomposition(...)
+apply_global_node_decomposition(...)
+apply_local_edge_decomposition(...)
+apply_global_edge_decomposition(...)
+```
+
+All decomposition functions passed to these helpers must return concrete lists,
+not generators. Each item in the returned list becomes one interpretation node.
+
+Minimal node-induced example:
+
+```python
+from toolz import curry
+from abstractgraph.operators import apply_local_node_decomposition
+
+@curry
+def high_degree_nodes(abstract_graph, min_degree=2):
+    def decompose(subgraph):
+        nodes = [node for node, degree in subgraph.degree() if degree >= min_degree]
+        return [nodes]
+
+    return apply_local_node_decomposition(
+        abstract_graph,
+        decompose,
+        source_operator=high_degree_nodes,
+        params={"min_degree": min_degree},
+        skip_empty=True,
+    )
+
+high_degree_nodes.directed_support = "preserve"
+```
+
+Minimal edge-induced example:
+
+```python
+from toolz import curry
+from abstractgraph.operators import apply_local_edge_decomposition
+
+@curry
+def same_label_edges(abstract_graph):
+    def decompose(subgraph):
+        edges = [
+            (u, v)
+            for u, v in subgraph.edges()
+            if subgraph.nodes[u].get("label") == subgraph.nodes[v].get("label")
+        ]
+        return [edges]
+
+    return apply_local_edge_decomposition(
+        abstract_graph,
+        decompose,
+        source_operator=same_label_edges,
+        skip_empty=True,
+    )
+
+same_label_edges.directed_support = "preserve"
+```
+
 ## Operator families
 
 - Structural decomposition:

@@ -242,3 +242,191 @@ def test_undirected_only_operator_rejects_directed_base_graph() -> None:
 
     with pytest.raises(ValueError, match="undirected base graphs"):
         ops.clique()(ag)
+
+
+def test_apply_local_node_decomposition_materializes_node_induced_subgraphs() -> None:
+    graph = nx.path_graph(4)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        return ops.apply_local_node_decomposition(
+            abstract_graph,
+            lambda subgraph: [{1, 2}],
+            source_operator=custom_operator,
+            params={"kind": "middle"},
+        )
+
+    custom_operator.directed_support = "preserve"
+    out = custom_operator(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+    meta = next(iter(out.interpretation_graph.nodes(data=True)))[1]["meta"]
+
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {1, 2}
+    assert set(mapped[0].edges()) == {(1, 2)}
+    assert meta["source_function"] == "custom_operator"
+    assert meta["params"] == {"kind": "middle"}
+    assert meta["source_chain"] == "custom_operator"
+    assert set(meta["parent_mapped_subgraph"].nodes()) == {0, 1, 2, 3}
+
+
+def test_apply_local_edge_decomposition_materializes_edge_induced_subgraphs() -> None:
+    graph = nx.Graph()
+    graph.add_edges_from([(0, 1), (1, 2), (0, 2)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        return ops.apply_local_edge_decomposition(
+            abstract_graph,
+            lambda subgraph: [[(0, 1), (1, 2)]],
+            source_operator=custom_operator,
+        )
+
+    custom_operator.directed_support = "preserve"
+    out = custom_operator(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {0, 1, 2}
+    assert set(mapped[0].edges()) == {(0, 1), (1, 2)}
+    assert not mapped[0].has_edge(0, 2)
+
+
+def test_apply_global_node_decomposition_receives_all_mapped_subgraphs() -> None:
+    graph = nx.path_graph(5)
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1])
+    ag.create_interpretation_node_with_subgraph_from_nodes([3, 4])
+    seen_counts = []
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        def decompose(subgraphs, base_graph):
+            seen_counts.append(len(subgraphs))
+            return [set().union(*(set(subgraph.nodes()) for subgraph in subgraphs))]
+
+        return ops.apply_global_node_decomposition(
+            abstract_graph,
+            decompose,
+            source_operator=custom_operator,
+        )
+
+    custom_operator.directed_support = "preserve"
+    out = custom_operator(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert seen_counts == [2]
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {0, 1, 3, 4}
+
+
+def test_apply_global_edge_decomposition_receives_all_mapped_subgraphs() -> None:
+    graph = nx.path_graph(4)
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_edges([(0, 1)])
+    ag.create_interpretation_node_with_subgraph_from_edges([(2, 3)])
+    seen_counts = []
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        def decompose(subgraphs, base_graph):
+            seen_counts.append(len(subgraphs))
+            return [[edge for subgraph in subgraphs for edge in subgraph.edges()]]
+
+        return ops.apply_global_edge_decomposition(
+            abstract_graph,
+            decompose,
+            source_operator=custom_operator,
+        )
+
+    custom_operator.directed_support = "preserve"
+    out = custom_operator(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert seen_counts == [2]
+    assert len(mapped) == 1
+    assert set(mapped[0].edges()) == {(0, 1), (2, 3)}
+
+
+def test_apply_decomposition_rejects_generator_outputs() -> None:
+    graph = nx.path_graph(3)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        def decompose(subgraph):
+            yield {0, 1}
+
+        return ops.apply_local_node_decomposition(
+            abstract_graph,
+            decompose,
+            source_operator=custom_operator,
+        )
+
+    custom_operator.directed_support = "preserve"
+
+    with pytest.raises(TypeError, match="must return a list of components"):
+        custom_operator(ag)
+
+
+def test_apply_decomposition_skip_empty_suppresses_empty_components() -> None:
+    graph = nx.path_graph(3)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        return ops.apply_local_node_decomposition(
+            abstract_graph,
+            lambda subgraph: [set(), {0, 1}],
+            source_operator=custom_operator,
+            skip_empty=True,
+        )
+
+    custom_operator.directed_support = "preserve"
+    out = custom_operator(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {0, 1}
+
+
+def test_apply_decomposition_rejects_unsupported_directed_graphs() -> None:
+    graph = nx.DiGraph()
+    graph.add_edge(0, 1)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    def custom_operator(abstract_graph: AbstractGraph) -> AbstractGraph:
+        return ops.apply_local_node_decomposition(
+            abstract_graph,
+            lambda subgraph: [{0, 1}],
+            source_operator=custom_operator,
+        )
+
+    custom_operator.directed_support = "undirected_only"
+
+    with pytest.raises(ValueError, match="undirected base graphs"):
+        custom_operator(ag)
+
+
+def test_refactored_degree_and_merge_use_scaffold_metadata() -> None:
+    graph = nx.Graph()
+    graph.add_edges_from([(0, 1), (1, 2), (0, 2), (2, 3)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    degree_out = ops.degree(value=2)(ag)
+    degree_data = next(iter(degree_out.interpretation_graph.nodes(data=True)))[1]
+    degree_meta = degree_data["meta"]
+
+    assert degree_meta["source_function"] == "degree"
+    assert degree_meta["params"] == {"value": (2, 2)}
+    assert set(get_mapped_subgraph(degree_data).nodes()) == {0, 1}
+
+    edge_ag = AbstractGraph(graph=graph)
+    edge_ag.create_interpretation_node_with_subgraph_from_edges([(0, 1)])
+    edge_ag.create_interpretation_node_with_subgraph_from_edges([(1, 2)])
+
+    merge_out = ops.merge(use_edges=True)(edge_ag)
+    merge_data = next(iter(merge_out.interpretation_graph.nodes(data=True)))[1]
+    merge_meta = merge_data["meta"]
+    mapped = get_mapped_subgraph(merge_data)
+
+    assert merge_meta["source_function"] == "merge"
+    assert merge_meta["params"] == {"use_edges": True}
+    assert set(mapped.edges()) == {(0, 1), (1, 2)}
+    assert not mapped.has_edge(0, 2)

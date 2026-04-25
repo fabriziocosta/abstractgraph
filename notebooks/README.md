@@ -36,6 +36,8 @@ Recommended sequence:
 Reference notebook:
 - `examples/example_abstract_graph_operators_overview.ipynb`
   Broad operator sampler covering unary, compositional, filtering, XML, and meta operators.
+- `examples/example_custom_operator_scaffold.ipynb`
+  How to write custom node-induced and edge-induced operators with the public scaffold helpers.
 
 Bootstrap behavior:
 - Notebooks use `notebooks/_bootstrap.py` to locate the repo root.
