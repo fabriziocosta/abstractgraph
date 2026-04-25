@@ -14,6 +14,7 @@ from abstractgraph.graphs import (
 )
 from abstractgraph.hashing import hash_graph
 from abstractgraph.vectorize import vectorize
+from abstractgraph.xml import operator_from_xml_string, operator_to_xml_string
 
 
 def _make_graph() -> nx.Graph:
@@ -430,3 +431,108 @@ def test_refactored_degree_and_merge_use_scaffold_metadata() -> None:
     assert merge_meta["params"] == {"use_edges": True}
     assert set(mapped.edges()) == {(0, 1), (1, 2)}
     assert not mapped.has_edge(0, 2)
+
+
+def test_scaffold_refactored_operator_regressions() -> None:
+    graph = nx.Graph()
+    graph.add_edges_from([(0, 1), (1, 2), (2, 0), (2, 3)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    node_out = ops.node()(ag)
+    node_data = next(iter(node_out.interpretation_graph.nodes(data=True)))[1]
+    assert node_data["meta"]["source_function"] == "node"
+    assert node_data["meta"]["params"] == {"param": None}
+    assert len(node_out.get_interpretation_nodes_mapped_subgraphs()) == 4
+
+    edge_out = ops.edge()(ag)
+    edge_mapped = edge_out.get_interpretation_nodes_mapped_subgraphs()
+    assert len(edge_mapped) == 4
+    assert {tuple(mapped.nodes()) for mapped in edge_mapped} == {
+        (0, 1),
+        (0, 2),
+        (1, 2),
+        (2, 3),
+    }
+    assert next(iter(edge_out.interpretation_graph.nodes(data=True)))[1]["meta"]["source_function"] == "edge"
+
+    component_out = ops.connected_component()(ag)
+    assert len(component_out.get_interpretation_nodes_mapped_subgraphs()) == 1
+    assert set(component_out.get_interpretation_nodes_mapped_subgraphs()[0].nodes()) == {0, 1, 2, 3}
+
+    cycle_out = ops.cycle()(ag)
+    cycle_mapped = cycle_out.get_interpretation_nodes_mapped_subgraphs()
+    assert len(cycle_mapped) == 1
+    assert set(cycle_mapped[0].nodes()) == {0, 1, 2}
+    assert next(iter(cycle_out.interpretation_graph.nodes(data=True)))[1]["meta"]["source_function"] == "cycle"
+
+    path_out = ops.path(number_of_edges=(2, 2))(ag)
+    assert path_out.interpretation_graph.number_of_nodes() > 0
+    path_meta = next(iter(path_out.interpretation_graph.nodes(data=True)))[1]["meta"]
+    assert path_meta["source_function"] == "path"
+    assert path_meta["params"] == {"number_of_edges": (2, 2)}
+
+    clique_out = ops.clique(number_of_nodes=(3, 3))(ag)
+    clique_mapped = clique_out.get_interpretation_nodes_mapped_subgraphs()
+    assert len(clique_mapped) == 1
+    assert set(clique_mapped[0].nodes()) == {0, 1, 2}
+    assert next(iter(clique_out.interpretation_graph.nodes(data=True)))[1]["meta"]["source_function"] == "clique"
+
+
+def test_scaffold_refactored_directed_operator_regressions() -> None:
+    graph = nx.DiGraph()
+    graph.add_edges_from([(0, 1), (1, 2), (2, 0), (1, 0)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    edge_out = ops.edge()(ag)
+    edge_mapped = edge_out.get_interpretation_nodes_mapped_subgraphs()
+    assert edge_mapped[0].is_directed()
+    assert (0, 1) in edge_mapped[0].edges()
+    assert (1, 0) in edge_mapped[0].edges()
+
+    cycle_out = ops.cycle()(ag)
+    assert any(
+        mapped.is_directed() and {(0, 1), (1, 2), (2, 0)}.issubset(set(mapped.edges()))
+        for mapped in cycle_out.get_interpretation_nodes_mapped_subgraphs()
+    )
+
+    edge_ag = AbstractGraph(graph=graph)
+    edge_ag.create_interpretation_node_with_subgraph_from_edges([(0, 1)])
+    complement_out = ops.edge_complement()(edge_ag)
+    complement_mapped = complement_out.get_interpretation_nodes_mapped_subgraphs()
+    assert len(complement_mapped) == 1
+    assert complement_mapped[0].is_directed()
+    assert set(complement_mapped[0].edges()) == {(1, 2), (2, 0), (1, 0)}
+    meta = next(iter(complement_out.interpretation_graph.nodes(data=True)))[1]["meta"]
+    assert meta["source_function"] == "edge_complement"
+
+
+def test_scaffold_refactored_global_combination_regression() -> None:
+    graph = nx.path_graph(3)
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_nodes([0])
+    ag.create_interpretation_node_with_subgraph_from_nodes([2])
+
+    out = ops.combination(number_of_elements=(2, 2), distance=(2, 2))(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+    meta = next(iter(out.interpretation_graph.nodes(data=True)))[1]["meta"]
+
+    assert len(mapped) == 1
+    assert set(mapped[0].nodes()) == {0, 2}
+    assert set(mapped[0].edges()) == set()
+    assert meta["source_function"] == "combination"
+    assert meta["params"] == {"number_of_elements": (2, 2), "distance": (2, 2)}
+
+
+def test_scaffold_refactored_operator_xml_round_trips() -> None:
+    operators = [
+        ops.node(),
+        ops.edge(),
+        ops.clique(number_of_nodes=(2, 3)),
+        ops.forward_compose(ops.edge(), ops.merge(use_edges=True)),
+        ops.combination(number_of_elements=(2, 2), distance=(0, 1)),
+    ]
+
+    for operator in operators:
+        xml = operator_to_xml_string(operator, pretty=True)
+        rebuilt = operator_from_xml_string(xml)
+        assert operator_to_xml_string(rebuilt, pretty=True) == xml

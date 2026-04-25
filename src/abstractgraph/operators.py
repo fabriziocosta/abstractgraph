@@ -1446,22 +1446,12 @@ def node(
         - Potential explosion in interpretation-node count for very large graphs; mitigate with sampling or filters.
         - Ensure downstream operators handle large numbers of singletons efficiently.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: [[node] for node in subgraph.nodes()],
+        source_operator=node,
+        params={"param": param},
     )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = [[node] for node in subgraph.nodes()]
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-
-    return out_abstract_graph
 
 #--------------------------------------------------------------------------------
 @curry
@@ -1531,21 +1521,12 @@ def edge(
         - Explosion in interpretation-node count for dense graphs (O(n^2) edges). Use filters or degree constraints upstream.
         - Directed graphs yield ordered edge pairs; ensure downstream operators handle orientation if relevant.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: list(subgraph.edges()),
+        source_operator=edge,
+        params={"param": param},
     )
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = list(subgraph.edges())
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
 
 #--------------------------------------------------------------------------------
 def connected_component_decomposition_function(subgraph):
@@ -1633,22 +1614,12 @@ def connected_component(
           or convert appropriately upstream.
         - Excessive instance counts if the input mapped subgraphs are highly fragmented; mitigate with size filters.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        connected_component_decomposition_function,
+        source_operator=connected_component,
+        params={"param": param},
     )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = connected_component_decomposition_function(subgraph)
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
 
 
 #--------------------------------------------------------------------------------
@@ -1860,14 +1831,7 @@ def split(
     if not isinstance(n_parts, int) or n_parts < 1:
         raise ValueError("n_parts must be an integer >= 1.")
 
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-    
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+    def decompose(subgraph):
         def _connected_parts_from_nodes(nodes):
             induced = subgraph.subgraph(nodes)
             return [set(c) for c in _connected_components_view(induced)]
@@ -1911,13 +1875,14 @@ def split(
             if not split_done:
                 break
 
-        for part in parts:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                list(part),
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+        return [list(part) for part in parts]
+
+    return apply_local_node_decomposition(
+        abstract_graph,
+        decompose,
+        source_operator=split,
+        params={"n_parts": n_parts, "seed": seed},
+    )
 
 
 #--------------------------------------------------------------------------------
@@ -2028,23 +1993,19 @@ def neighborhood(
         - For very large radius ranges, output size can exceed memory quickly.
     """
     radius = value_to_2tuple(radius)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+    def decompose(subgraph):
+        components = []
         for r in range(min(radius), max(radius) + 1):
             for source in subgraph.nodes():
-                component = get_reachable_nodes_bfs(subgraph, source, cutoff=r)
-                out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                    component,
-                    meta=build_meta_from_function_context()
-                )
-    
-    return out_abstract_graph
+                components.append(get_reachable_nodes_bfs(subgraph, source, cutoff=r))
+        return components
+
+    return apply_local_node_decomposition(
+        abstract_graph,
+        decompose,
+        source_operator=neighborhood,
+        params={"radius": radius},
+    )
 
 #--------------------------------------------------------------------------------
 def get_edges_from_cycle(cycle):
@@ -2197,22 +2158,12 @@ def cycle(
         - Computer networks: routing loops.
         - Chemistry: aromatic rings or other cyclic motifs.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        cycle_decomposition_function,
+        source_operator=cycle,
+        params={"param": param},
     )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = cycle_decomposition_function(subgraph)
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
 
 @curry
 def tree(
@@ -2262,22 +2213,12 @@ def tree(
     Failure Modes
         - Tiny graphs (<2 nodes) may not yield meaningful components.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        non_cycle_decomposition_function,
+        source_operator=tree,
+        params={"param": param},
     )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = non_cycle_decomposition_function(subgraph)
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
 
 #--------------------------------------------------------------------------------
 def path_decomposition_function(subgraph, min_number_of_edges=1, max_number_of_edges=None):
@@ -2376,26 +2317,16 @@ def path(
         - Paths shorter than `min_number_of_edges` or longer than `max_number_of_edges` are ignored.
     """
     number_of_edges = value_to_2tuple(number_of_edges)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = path_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: path_decomposition_function(
             subgraph,
             min_number_of_edges=min(number_of_edges),
-            max_number_of_edges=max(number_of_edges)
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+            max_number_of_edges=max(number_of_edges),
+        ),
+        source_operator=path,
+        params={"number_of_edges": number_of_edges},
+    )
 
 #--------------------------------------------------------------------------------
 def spine_decomposition_function(subgraph, radius=0, seed=42):
@@ -2466,22 +2397,12 @@ def spine(
             Seed used to choose among equally long candidate spine paths.
             Use a fixed value for reproducible decompositions.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: spine_decomposition_function(subgraph, radius=radius, seed=seed),
+        source_operator=spine,
+        params={"radius": radius, "seed": seed},
     )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = spine_decomposition_function(subgraph, radius=radius, seed=seed)
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-
-    return out_abstract_graph
 
 #--------------------------------------------------------------------------------
 def graphlet_decomposition_function(subgraph, radius=1, min_number_of_nodes=1, max_number_of_nodes=3):
@@ -2572,28 +2493,18 @@ def graphlet(
         - Large radius or high max_number_of_nodes leads to combinatorial blow-up.
         - Disconnected candidate subgraphs are discarded.
     """
-    number_of_nodes = value_to_2tuple(number_of_nodes) 
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = graphlet_decomposition_function(
+    number_of_nodes = value_to_2tuple(number_of_nodes)
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: graphlet_decomposition_function(
             subgraph,
             radius=radius,
             min_number_of_nodes=min(number_of_nodes),
-            max_number_of_nodes=max(number_of_nodes)
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+            max_number_of_nodes=max(number_of_nodes),
+        ),
+        source_operator=graphlet,
+        params={"radius": radius, "number_of_nodes": number_of_nodes},
+    )
 
 #--------------------------------------------------------------------------------    
 def clique_decomposition_function(subgraph, min_number_of_nodes=1, max_number_of_nodes=None):
@@ -2674,28 +2585,17 @@ def clique(
         - Large dense graphs may yield many cliques (combinatorial explosion).
         - Single-node cliques are included unless filtered by number_of_nodes.
     """
-    _validate_directed_support(clique, abstract_graph)
     number_of_nodes = value_to_2tuple(number_of_nodes)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = clique_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: clique_decomposition_function(
             subgraph,
             min_number_of_nodes=min(number_of_nodes),
-            max_number_of_nodes=max(number_of_nodes)
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+            max_number_of_nodes=max(number_of_nodes),
+        ),
+        source_operator=clique,
+        params={"number_of_nodes": number_of_nodes},
+    )
 
 #--------------------------------------------------------------------------------    
 @curry
@@ -2839,31 +2739,25 @@ def edge_complement(
         AbstractGraph: A new AbstractGraph with one interpretation node per input mapped subgraph,
         where each mapped subgraph is the edge-induced complement subgraph.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
     is_directed = nx.is_directed(abstract_graph.base_graph)
 
     def edge_key(edge):
         u, v = edge
         return (u, v) if is_directed else frozenset((u, v))
 
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
+    def decompose(subgraph):
         subgraph_edge_keys = {edge_key(e) for e in subgraph.edges()}
-        complement_edges = [
+        return [[
             e for e in abstract_graph.base_graph.edges()
             if edge_key(e) not in subgraph_edge_keys
-        ]
-        out_abstract_graph.create_interpretation_node_with_subgraph_from_edges(
-            complement_edges,
-            meta=build_meta_from_function_context()
-        )
+        ]]
 
-    return out_abstract_graph
+    return apply_local_edge_decomposition(
+        abstract_graph,
+        decompose,
+        source_operator=edge_complement,
+        params={"param": param},
+    )
 
 #--------------------------------------------------------------------------------    
 @curry
@@ -2999,26 +2893,16 @@ def betweenness_centrality(
         - On large subgraphs, centrality computation may be expensive.
         - If number_of_nodes exceeds subgraph size, returns all nodes.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = betweenness_centrality_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: betweenness_centrality_decomposition_function(
             subgraph,
             number_of_nodes=number_of_nodes,
-            use_perifery=use_perifery
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-    
-    return out_abstract_graph
+            use_perifery=use_perifery,
+        ),
+        source_operator=betweenness_centrality,
+        params={"number_of_nodes": number_of_nodes, "use_perifery": use_perifery},
+    )
 
 #--------------------------------------------------------------------------------    
 def betweenness_centrality_split_decomposition_function(subgraph, number_of_nodes=5):
@@ -3057,25 +2941,15 @@ def betweenness_centrality_split(
         AbstractGraph: A new AbstractGraph where each interpretation node is the induced
         subgraph of one chunk from the betweenness-ranked node list.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = betweenness_centrality_split_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: betweenness_centrality_split_decomposition_function(
             subgraph,
-            number_of_nodes=number_of_nodes
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-
-    return out_abstract_graph
+            number_of_nodes=number_of_nodes,
+        ),
+        source_operator=betweenness_centrality_split,
+        params={"number_of_nodes": number_of_nodes},
+    )
 
 #--------------------------------------------------------------------------------    
 def betweenness_centrality_hop_split_decomposition_function(subgraph, n_hops=1):
@@ -3147,25 +3021,15 @@ def betweenness_centrality_hop_split(
         AbstractGraph: A new AbstractGraph with one interpretation node per emitted
         connected component from the hop-window decomposition.
     """
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = betweenness_centrality_hop_split_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: betweenness_centrality_hop_split_decomposition_function(
             subgraph,
-            n_hops=n_hops
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-
-    return out_abstract_graph
+            n_hops=n_hops,
+        ),
+        source_operator=betweenness_centrality_hop_split,
+        params={"n_hops": n_hops},
+    )
 
 #--------------------------------------------------------------------------------
 def _count_boundary_nodes(subgraph: nx.Graph, part_nodes: set) -> int:
@@ -3742,16 +3606,27 @@ def low_cut_partition(
     Returns:
         AbstractGraph: New AbstractGraph with one interpretation node per partition part.
     """
-    _validate_directed_support(low_cut_partition, abstract_graph)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = low_cut_partition_decomposition_function(
+    params = {
+        "target_max_boundary_nodes": target_max_boundary_nodes,
+        "target_max_cut_edges": target_max_cut_edges,
+        "max_part_size": max_part_size,
+        "min_part_size": min_part_size,
+        "max_split_trials": max_split_trials,
+        "balance_tolerance": balance_tolerance,
+        "max_depth": max_depth,
+        "force_split_oversized": force_split_oversized,
+        "allow_small_parts": allow_small_parts,
+        "min_overlap_nodes": min_overlap_nodes,
+        "strict_max_boundary": strict_max_boundary,
+        "prefer_low_attachment_split": prefer_low_attachment_split,
+        "low_attachment_max_edges": low_attachment_max_edges,
+        "low_attachment_min_component_size": low_attachment_min_component_size,
+        "low_attachment_max_pair_trials": low_attachment_max_pair_trials,
+        "seed": seed,
+    }
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: low_cut_partition_decomposition_function(
             subgraph,
             target_max_boundary_nodes=target_max_boundary_nodes,
             target_max_cut_edges=target_max_cut_edges,
@@ -3769,14 +3644,10 @@ def low_cut_partition(
             low_attachment_min_component_size=low_attachment_min_component_size,
             low_attachment_max_pair_trials=low_attachment_max_pair_trials,
             seed=seed,
-        )
-        for component in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component,
-                meta=build_meta_from_function_context()
-            )
-
-    return out_abstract_graph
+        ),
+        source_operator=low_cut_partition,
+        params=params,
+    )
 
 #--------------------------------------------------------------------------------    
 @curry
@@ -4248,26 +4119,17 @@ def combination(
     """
     number_of_elements = value_to_2tuple(number_of_elements)
     distance = value_to_2tuple(distance)
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
+    return apply_global_node_decomposition(
+        abstract_graph,
+        lambda subgraphs, base_graph: combination_decomposition_function(
+            subgraphs,
+            base_graph,
+            number_of_elements=number_of_elements,
+            distance=distance,
+        ),
+        source_operator=combination,
+        params={"number_of_elements": number_of_elements, "distance": distance},
     )
-
-    components = combination_decomposition_function(
-        abstract_graph.get_interpretation_nodes_mapped_subgraphs(),
-        abstract_graph.base_graph,
-        number_of_elements=number_of_elements, 
-        distance=distance
-    )
-    for component in components:
-        out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-            component,
-            meta=build_meta_from_function_context()
-        )
-
-    return out_abstract_graph
 
 #--------------------------------------------------------------------------------
 def union_of_shortest_paths_decomposition_function(
@@ -4314,29 +4176,19 @@ def union_of_shortest_paths(
     min_len = max(0, int(min(length)))
     max_len = int(max(length))
 
-    out_abstract_graph = AbstractGraph(
-        graph=abstract_graph.base_graph,
-        label_function=abstract_graph.label_function,
-        attribute_function=abstract_graph.attribute_function,
-        edge_function=abstract_graph.edge_function,
-    )
-
     if max_len < 0:
-        return out_abstract_graph
+        return _new_like_abstract_graph(abstract_graph)
 
-    for subgraph in abstract_graph.get_interpretation_nodes_mapped_subgraphs():
-        components = union_of_shortest_paths_decomposition_function(
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: union_of_shortest_paths_decomposition_function(
             subgraph,
             min_len=min_len,
             max_len=max_len,
-        )
-        for component_nodes in components:
-            out_abstract_graph.create_interpretation_node_with_subgraph_from_nodes(
-                component_nodes,
-                meta=build_meta_from_function_context(),
-            )
-
-    return out_abstract_graph
+        ),
+        source_operator=union_of_shortest_paths,
+        params={"length": length},
+    )
 
 
 #====================================================================================================
