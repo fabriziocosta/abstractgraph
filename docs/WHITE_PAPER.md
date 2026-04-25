@@ -5,6 +5,8 @@ core package and the split ecosystem around it.
 
 Package mapping:
 - `abstractgraph`: representation, operators, hashing, display, vectorization
+- `abstractgraph-graphicalizer`: conversion of raw domain objects into base
+  graphs
 - `abstractgraph-ml`: estimators and analysis on top of those representations
 - `abstractgraph-generative`: rewriting and generation on top of those
   representations
@@ -23,6 +25,7 @@ components of the input graph.
 
 The framework is organized around three ideas:
 
+- graphicalization: converting raw objects into explicit graph form
 - a calculus of structural interpretations of a graph
 - a lattice of graph interpretations
 - a counting-measure embedding that connects structural interpretations to
@@ -37,16 +40,17 @@ can be inspected directly in the input graph.
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Structural Interpretations of Graphs](#2-structural-interpretations-of-graphs)
-3. [A Calculus of Structural Interpretations](#3-a-calculus-of-structural-interpretations)
-4. [The Lattice of Graph Interpretations](#4-the-lattice-of-graph-interpretations)
-5. [Counting-Measure Embedding](#5-counting-measure-embedding)
-6. [Structural Programs as Feature Generators](#6-structural-programs-as-feature-generators)
-7. [A New Notion of Interpretability](#7-a-new-notion-of-interpretability)
-8. [Structural Programs as Explanations](#8-structural-programs-as-explanations)
-9. [Advantages](#9-advantages)
-10. [Supporting Perspectives](#10-supporting-perspectives)
-11. [Conclusion](#11-conclusion)
+2. [Graphicalization](#2-graphicalization)
+3. [Structural Interpretations of Graphs](#3-structural-interpretations-of-graphs)
+4. [A Calculus of Structural Interpretations](#4-a-calculus-of-structural-interpretations)
+5. [The Lattice of Graph Interpretations](#5-the-lattice-of-graph-interpretations)
+6. [Counting-Measure Embedding](#6-counting-measure-embedding)
+7. [Structural Programs as Feature Generators](#7-structural-programs-as-feature-generators)
+8. [A New Notion of Interpretability](#8-a-new-notion-of-interpretability)
+9. [Structural Programs as Explanations](#9-structural-programs-as-explanations)
+10. [Advantages](#10-advantages)
+11. [Supporting Perspectives](#11-supporting-perspectives)
+12. [Conclusion](#12-conclusion)
 
 ## 1. Introduction
 
@@ -79,7 +83,49 @@ explicit operators acting on graph interpretations. In this sense,
 interpretability comes from structural programs and their outputs, not from a
 globally tiny vocabulary.
 
-## 2. Structural Interpretations of Graphs
+## 2. Graphicalization
+
+The framework begins before abstract graph operators are applied. Many
+learning problems do not arrive as graphs. They arrive as molecules, images,
+token sequences, attention tensors, tables, proteins, RNA sequences, source
+programs, or other domain objects.
+
+Graphicalization is the step that converts those raw objects into a base graph.
+It makes the relational assumptions of the analysis explicit.
+
+Formally, a graphicalizer is a domain-specific map:
+
+$$
+\Gamma : X \rightarrow G
+$$
+
+from a raw object $X$ to a graph $G = (V, E)$ with optional node, edge, and
+attribute labels.
+
+Examples include:
+
+- atoms and bonds converted into a molecular graph
+- pixels, patches, or regions converted into an image graph
+- attention patterns converted into a token or segment graph
+- residues or nucleotides converted into protein or RNA graphs
+- rows, records, or entities converted into data graphs
+
+This step matters for interpretability. The base graph is not merely a data
+container; it is the first explicit hypothesis about which relationships are
+available to later structural programs.
+
+Graphicalization can produce undirected graphs when relationships are
+symmetric, such as many molecular bonds or similarity links. It can also
+produce directed graphs when orientation is meaningful, such as dependency
+edges, causal influence, data flow, citation, temporal transition, or directed
+attention. Direction is therefore part of the representation, not a rendering
+detail.
+
+The `abstractgraph-graphicalizer` package contains domain adapters for this
+stage. The `abstractgraph` package then takes the resulting NetworkX graph as
+the base graph and constructs structural interpretations over it.
+
+## 3. Structural Interpretations of Graphs
 
 Let
 
@@ -87,7 +133,9 @@ $$
 G = (V, E)
 $$
 
-be a base graph.
+be a base graph. The base graph may be undirected or directed. In directed
+graphs, edge orientation is semantic and is preserved by the core
+representation.
 
 A structural interpretation of $G$ specifies:
 
@@ -136,7 +184,13 @@ The explanatory object is therefore not an atom or bond in isolation. It is a
 structural component of the base graph as represented in the interpretation
 graph.
 
-## 3. A Calculus of Structural Interpretations
+In a program-analysis graph, a directed base edge may represent control flow or
+data flow. A structural interpretation may then distinguish a pattern that
+reaches a use site from one that is merely adjacent to it. The same undirected
+topology and the same directed topology can therefore carry different
+explanatory content.
+
+## 4. A Calculus of Structural Interpretations
 
 The framework assumes a family of operators
 
@@ -162,6 +216,12 @@ Typical operators include:
 - connecting interpretation nodes based on properties of the base graph
 - extending a local structure through paths, neighborhoods, or motifs
 
+When the base graph is directed, operators preserve directed mapped subgraphs
+unless the operator explicitly converts or symmetrizes structure. Connectivity
+operators can choose the appropriate directed or weakly connected semantics,
+and edge-complement or local-edge operators preserve orientation when it is
+part of the base graph.
+
 Because operators map Abstract Graphs to Abstract Graphs, they can be
 composed. A structural program is therefore a sequence
 
@@ -179,7 +239,7 @@ Each interpretation node can also carry a derivation trace indicating which
 operator sequence generated it. That trace is a key ingredient of explanation,
 because it tells us not only what subgraph matters but how it was constructed.
 
-## 4. The Lattice of Graph Interpretations
+## 5. The Lattice of Graph Interpretations
 
 Different interpretation graphs over the same base graph correspond to
 different ways of viewing the same underlying structure.
@@ -208,7 +268,7 @@ The lattice perspective also clarifies that learning is not just parameter
 fitting. It is often a search over useful interpretations of the same base
 graph.
 
-## 5. Counting-Measure Embedding
+## 6. Counting-Measure Embedding
 
 To connect structural interpretations to machine learning models, we embed
 generated interpreted structures into a vector space.
@@ -251,7 +311,14 @@ The important point is that explainability does not reside in the hash bucket
 by itself. It resides in the interpreted structures and operator traces that
 gave rise to the counted coordinates.
 
-## 6. Structural Programs as Feature Generators
+For directed base graphs, the identifier map should preserve orientation when
+orientation is part of the structural meaning. The current graph hashing
+scheme distinguishes undirected from directed graphs, separates incoming and
+outgoing incident edges, and preserves source-target order in directed edge
+summaries. Thus a directed path and the same path with reversed arcs can occupy
+different feature coordinates.
+
+## 7. Structural Programs as Feature Generators
 
 Every operator in the calculus generates, refines, or relates interpreted
 structures. A structural program therefore acts as a feature-generation
@@ -276,7 +343,7 @@ without destroying interpretability. The model may have access to many
 possible generated structures, while any given instance activates only a
 restricted subset.
 
-## 7. A New Notion of Interpretability
+## 8. A New Notion of Interpretability
 
 The framework suggests a different standard for interpretability.
 
@@ -304,7 +371,7 @@ An explanation is interpretable when a human can:
 The explanatory burden shifts from listing weights to inspecting a small set
 of generated structural objects.
 
-## 8. Structural Programs as Explanations
+## 9. Structural Programs as Explanations
 
 In this framework, explanations are not merely features. They are structural
 programs together with the particular interpreted structures those programs
@@ -349,7 +416,25 @@ The explanation for a prediction is then not a bare coefficient on a hashed
 feature. It is the generated relational motif instantiated in that molecule,
 together with the operator trace that produced it.
 
-## 9. Advantages
+### Directed-Structure Illustration
+
+Consider a program graph in which edges represent data flow. A pattern where a
+sanitized value flows into a sink is not equivalent to a pattern where the sink
+flows back to the sanitizer. The undirected adjacency may be identical, but the
+directed structure changes the explanation.
+
+A structural program can therefore generate direction-sensitive motifs such as:
+
+1. source nodes
+2. transformation paths
+3. sink neighborhoods
+4. directed connector paths from source to sink
+
+The resulting explanation is grounded not only in which components are near
+each other, but also in how information or control moves through the base
+graph.
+
+## 10. Advantages
 
 The framework offers several advantages.
 
@@ -373,12 +458,26 @@ objects rather than through a global simplification of the whole model.
 Counting measures convert generated structural interpretations into standard
 feature vectors that can be used by familiar estimators.
 
+### Domain Flexibility
+
+Graphicalization separates domain-specific graph construction from structural
+interpretation. A molecule, image, attention matrix, table, or program can be
+converted into a base graph by a domain adapter and then processed by the same
+operator calculus.
+
+### Directed and Undirected Structure
+
+The representation supports both undirected and directed base graphs. Direction
+is preserved in mapped subgraphs, hashing, and directed edge summaries, so
+orientation-sensitive explanations remain available when the domain requires
+them.
+
 ### Modifiability
 
 When an explanation is wrong or incomplete, one can revise the interpretation
 operators, the structural vocabulary, or the level of granularity.
 
-## 10. Supporting Perspectives
+## 11. Supporting Perspectives
 
 The main framework does not depend on any single external formalism, but
 several perspectives help clarify its role.
@@ -420,19 +519,21 @@ stable explanatory units used by learning.
 Reference:
 https://arxiv.org/abs/1503.02406
 
-## 11. Conclusion
+## 12. Conclusion
 
 This white paper proposes a structural approach to interpretable graph
-learning based on three central ideas:
+learning based on four central ideas:
 
+- graphicalization of raw objects into explicit graph form
 - a calculus of structural interpretations of a graph
 - a lattice of graph interpretations
 - a counting-measure embedding that connects generated structures to machine
   learning vectors
 
 The central object is the Abstract Graph, defined as the pair of a base graph
-and an interpretation graph. Operators act on Abstract Graphs by constructing
-and transforming interpretation graphs grounded in explicit base subgraphs.
+and an interpretation graph. The base graph can be undirected or directed.
+Operators act on Abstract Graphs by constructing and transforming
+interpretation graphs grounded in explicit base subgraphs.
 
 This reframes interpretability. A model need not be globally tiny to be
 understandable. What matters is whether an individual prediction can be
