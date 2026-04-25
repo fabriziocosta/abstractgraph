@@ -43,6 +43,103 @@ import random
 # UTILITIES
 #====================================================================================================
 
+# Directedness is a capability contract on each operator, not a runtime graph
+# flag. Runtime directedness comes from the base NetworkX graph (`Graph` vs
+# `DiGraph`); these values document how an operator interprets that graph type.
+# Keep the registry at the bottom of this module in sync when adding operators.
+DIRECTED_SUPPORT_AGNOSTIC = "agnostic"
+DIRECTED_SUPPORT_PRESERVE = "preserve"
+DIRECTED_SUPPORT_WEAK = "weak"
+DIRECTED_SUPPORT_DIRECTED = "directed"
+DIRECTED_SUPPORT_UNDIRECTED_ONLY = "undirected_only"
+
+DIRECTED_SUPPORT_VALUES = {
+    DIRECTED_SUPPORT_AGNOSTIC,
+    DIRECTED_SUPPORT_PRESERVE,
+    DIRECTED_SUPPORT_WEAK,
+    DIRECTED_SUPPORT_DIRECTED,
+    DIRECTED_SUPPORT_UNDIRECTED_ONLY,
+}
+
+
+def _set_directed_support(operator: Callable, directed_support: str) -> Callable:
+    """Attach the directedness support contract to an operator callable.
+
+    The contract is intentionally metadata, not a second source of graph state:
+    directedness still comes from the input NetworkX graph type. The metadata
+    describes how this operator interprets that directedness.
+    """
+    if directed_support not in DIRECTED_SUPPORT_VALUES:
+        raise ValueError(f"Invalid directed_support value: {directed_support!r}")
+    operator.directed_support = directed_support
+    # `toolz.curry` returns wrapper objects and partial curry objects. Attach
+    # the contract to the underlying function too, so partial applications such
+    # as `clique(number_of_nodes=3)` remain inspectable by higher-order operators.
+    for wrapped in (
+        getattr(operator, "func", None),
+        getattr(getattr(operator, "_partial", None), "func", None),
+    ):
+        if wrapped is not None:
+            try:
+                wrapped.directed_support = directed_support
+            except Exception:
+                pass
+    return operator
+
+
+def _get_directed_support(operator: Callable) -> Optional[str]:
+    """Read directed_support from a callable, including curried wrappers."""
+    for candidate in (
+        operator,
+        getattr(operator, "func", None),
+        getattr(getattr(operator, "_partial", None), "func", None),
+    ):
+        directed_support = getattr(candidate, "directed_support", None)
+        if directed_support is not None:
+            return directed_support
+    return None
+
+
+def get_directed_support(operator: Callable) -> Optional[str]:
+    """Return an operator's directedness support contract.
+
+    Plain built-in operators expose `operator.directed_support` directly. This
+    accessor also handles partially applied `toolz.curry` operators, whose
+    metadata lives on the wrapped function rather than the curry object itself.
+    """
+    return _get_directed_support(operator)
+
+
+def _validate_directed_support(operator: Callable, abstract_graph: 'AbstractGraph') -> None:
+    """Raise clearly when an operator does not support directed base graphs."""
+    directed_support = _get_directed_support(operator)
+    if directed_support is None:
+        # User-defined functions are allowed in ad hoc pipelines. The registry
+        # tests require built-in operators to declare directed_support.
+        return
+    if (
+        directed_support == DIRECTED_SUPPORT_UNDIRECTED_ONLY
+        and nx.is_directed(abstract_graph.base_graph)
+    ):
+        raise ValueError(
+            f"Operator `{getattr(operator, '__name__', operator)}` supports only undirected base graphs."
+        )
+
+
+def _combine_directed_support(operators: Tuple[Callable, ...]) -> str:
+    """Summarize child operator directed support for a composed operator."""
+    supports = {_get_directed_support(operator) for operator in operators}
+    supports.discard(None)
+    if DIRECTED_SUPPORT_UNDIRECTED_ONLY in supports:
+        return DIRECTED_SUPPORT_UNDIRECTED_ONLY
+    if DIRECTED_SUPPORT_DIRECTED in supports:
+        return DIRECTED_SUPPORT_DIRECTED
+    if DIRECTED_SUPPORT_WEAK in supports:
+        return DIRECTED_SUPPORT_WEAK
+    if DIRECTED_SUPPORT_PRESERVE in supports:
+        return DIRECTED_SUPPORT_PRESERVE
+    return DIRECTED_SUPPORT_AGNOSTIC
+
 _SOURCE_CHAIN_XML: ContextVar[Optional[str]] = ContextVar("source_chain_xml", default=None)
 _ADD_INCLUDE_SELF: ContextVar[bool] = ContextVar("add_include_self", default=False)
 
@@ -198,6 +295,9 @@ def _call_decomposition(func: Callable[['AbstractGraph'], 'AbstractGraph'], abst
     Returns:
         AbstractGraph: Result of applying func.
     """
+    # Higher-order operators funnel built-in child operators through this helper,
+    # so unsupported directed usage fails before the child starts mutating state.
+    _validate_directed_support(func, abstract_graph)
     if _is_add_operator(func):
         with _add_include_self_context(True):
             return func(abstract_graph)
@@ -380,6 +480,7 @@ def add(*decomposition_functions, dedup: bool = True):
     composed.decomposition_functions = decomposition_functions
     composed.operator_type = "add"
     composed.params = {"dedup": dedup}
+    _set_directed_support(composed, _combine_directed_support(decomposition_functions))
     return composed
 
 #--------------------------------------------------------------------------------
@@ -454,6 +555,7 @@ def compose(*decomposition_functions, dedup: bool = True):
     composed.chain = decomposition_functions
     composed.operator_type = "compose"  # Mark as a compose operator
     composed.params = {"dedup": dedup}
+    _set_directed_support(composed, _combine_directed_support(decomposition_functions))
     return composed
 
 def forward_compose(*decomposition_functions, dedup: bool = True):
@@ -525,6 +627,7 @@ def forward_compose(*decomposition_functions, dedup: bool = True):
     composed.chain = decomposition_functions
     composed.operator_type = "forward_compose"  # Mark as a forward_compose operator
     composed.params = {"dedup": dedup}
+    _set_directed_support(composed, _combine_directed_support(decomposition_functions))
     return composed
 
 #--------------------------------------------------------------------------------
@@ -616,6 +719,7 @@ def compose_product(combiner, *decomposition_functions, dedup: bool = True):
     composed.operator_type = "product"
     composed.combiner = combiner
     composed.params = {"dedup": dedup}
+    _set_directed_support(composed, _combine_directed_support(decomposition_functions))
     return composed
 
 #====================================================================================================
@@ -2375,6 +2479,7 @@ def clique(
         - Large dense graphs may yield many cliques (combinatorial explosion).
         - Single-node cliques are included unless filtered by number_of_nodes.
     """
+    _validate_directed_support(clique, abstract_graph)
     number_of_nodes = value_to_2tuple(number_of_nodes)
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
@@ -3442,6 +3547,7 @@ def low_cut_partition(
     Returns:
         AbstractGraph: New AbstractGraph with one interpretation node per partition part.
     """
+    _validate_directed_support(low_cut_partition, abstract_graph)
     out_abstract_graph = AbstractGraph(
         graph=abstract_graph.base_graph,
         label_function=abstract_graph.label_function,
@@ -5494,78 +5600,148 @@ def min_number_of_subgraph_edges(
 #====================================================================================================
 # XML REGISTRATION
 #====================================================================================================
+_AG_OPERATORS = [
+    # Higher-order composition
+    add,
+    compose,
+    forward_compose,
+    compose_product,
+
+    # Conditionals and loops
+    if_then_else,
+    if_then_elif_else,
+    for_loop,
+    while_loop,
+
+    # Unary / decomposition operators
+    identity,
+    random_part,
+    node,
+    edge,
+    connected_component,
+    degree,
+    split,
+    neighborhood,
+    cycle,
+    tree,
+    path,
+    spine,
+    graphlet,
+    clique,
+
+    # Unary graph transforms
+    complement,
+    local_complement,
+    edge_complement,
+    local_edge_complement,
+    betweenness_centrality,
+    betweenness_centrality_split,
+    betweenness_centrality_hop_split,
+    low_cut_partition,
+    merge,
+    deduplicate,
+    remove_redundant_mapped_subgraphs,
+    combination,
+    union_of_shortest_paths,
+    intersection,
+    intersection_edges,
+
+    # Filters
+    filter_by_number_of_connected_components,
+    filter_by_number_of_nodes,
+    filter_by_number_of_edges,
+    filter_by_node_label,
+    filter_by_edge_label,
+    select_top_by_feature_ranking,
+    connected_components_from_feature_ranking,
+    filter_by_sampling,
+
+    # Binary composition & relabelling
+    binary_combination,
+    binary_intersection,
+    unlabel,
+    prepend_label,
+    restore_label,
+    name,
+]
+
+_DIRECTED_SUPPORT_BY_OPERATOR = {
+    # Factories and control-flow operators validate child operators when they run.
+    add: DIRECTED_SUPPORT_AGNOSTIC,
+    compose: DIRECTED_SUPPORT_AGNOSTIC,
+    forward_compose: DIRECTED_SUPPORT_AGNOSTIC,
+    compose_product: DIRECTED_SUPPORT_AGNOSTIC,
+    if_then_else: DIRECTED_SUPPORT_AGNOSTIC,
+    if_then_elif_else: DIRECTED_SUPPORT_AGNOSTIC,
+    for_loop: DIRECTED_SUPPORT_AGNOSTIC,
+    while_loop: DIRECTED_SUPPORT_AGNOSTIC,
+
+    # Operators that preserve directed mapped subgraphs without changing edge orientation.
+    identity: DIRECTED_SUPPORT_PRESERVE,
+    random_part: DIRECTED_SUPPORT_PRESERVE,
+    node: DIRECTED_SUPPORT_PRESERVE,
+    edge: DIRECTED_SUPPORT_PRESERVE,
+    degree: DIRECTED_SUPPORT_PRESERVE,
+    complement: DIRECTED_SUPPORT_PRESERVE,
+    edge_complement: DIRECTED_SUPPORT_PRESERVE,
+    local_edge_complement: DIRECTED_SUPPORT_PRESERVE,
+    merge: DIRECTED_SUPPORT_PRESERVE,
+    deduplicate: DIRECTED_SUPPORT_PRESERVE,
+    remove_redundant_mapped_subgraphs: DIRECTED_SUPPORT_PRESERVE,
+    intersection: DIRECTED_SUPPORT_PRESERVE,
+    intersection_edges: DIRECTED_SUPPORT_PRESERVE,
+    filter_by_number_of_nodes: DIRECTED_SUPPORT_PRESERVE,
+    filter_by_number_of_edges: DIRECTED_SUPPORT_PRESERVE,
+    filter_by_node_label: DIRECTED_SUPPORT_PRESERVE,
+    filter_by_edge_label: DIRECTED_SUPPORT_PRESERVE,
+    filter_by_sampling: DIRECTED_SUPPORT_PRESERVE,
+    unlabel: DIRECTED_SUPPORT_PRESERVE,
+    prepend_label: DIRECTED_SUPPORT_PRESERVE,
+    restore_label: DIRECTED_SUPPORT_PRESERVE,
+    name: DIRECTED_SUPPORT_PRESERVE,
+
+    # Directed graph inputs are accepted, but connectivity is intentionally weak.
+    connected_component: DIRECTED_SUPPORT_WEAK,
+    split: DIRECTED_SUPPORT_WEAK,
+    tree: DIRECTED_SUPPORT_WEAK,
+    spine: DIRECTED_SUPPORT_WEAK,
+    graphlet: DIRECTED_SUPPORT_WEAK,
+    local_complement: DIRECTED_SUPPORT_WEAK,
+    betweenness_centrality_split: DIRECTED_SUPPORT_WEAK,
+    betweenness_centrality_hop_split: DIRECTED_SUPPORT_WEAK,
+    combination: DIRECTED_SUPPORT_WEAK,
+    union_of_shortest_paths: DIRECTED_SUPPORT_WEAK,
+    filter_by_number_of_connected_components: DIRECTED_SUPPORT_WEAK,
+    select_top_by_feature_ranking: DIRECTED_SUPPORT_WEAK,
+    connected_components_from_feature_ranking: DIRECTED_SUPPORT_WEAK,
+    binary_combination: DIRECTED_SUPPORT_WEAK,
+    binary_intersection: DIRECTED_SUPPORT_WEAK,
+
+    # Directed graph inputs use directed semantics.
+    neighborhood: DIRECTED_SUPPORT_DIRECTED,
+    cycle: DIRECTED_SUPPORT_DIRECTED,
+    path: DIRECTED_SUPPORT_DIRECTED,
+    betweenness_centrality: DIRECTED_SUPPORT_DIRECTED,
+
+    # These rely on algorithms whose semantics are undirected in this package.
+    clique: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
+    low_cut_partition: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
+}
+
+for _op, _directed_support in _DIRECTED_SUPPORT_BY_OPERATOR.items():
+    _set_directed_support(_op, _directed_support)
+
+
+def get_operator_registry() -> List[Callable]:
+    """Return built-in AbstractGraph operators with declared directed_support."""
+    return list(_AG_OPERATORS)
+
 # Explicitly register all AbstractGraph operators with the XML serializer/deserializer.
 # This avoids relying on implicit discovery and ensures stable round-trips by name.
 try:
     from abstractgraph.xml import register_operator
 
-    # List only operators that operate on and/or return AbstractGraph instances or pipelines.
     # Scalar reducers (for example, number_of_interpretation_graph_nodes) are intentionally excluded from XML pipelines.
-    _AG_OPERATORS = [
-        # Higher-order composition
-        add,
-        compose,
-        forward_compose,
-        compose_product,
-
-        # Conditionals and loops
-        if_then_else,
-        if_then_elif_else,
-        for_loop,
-        while_loop,
-
-        # Unary / decomposition operators
-        identity,
-        random_part,
-        node,
-        edge,
-        connected_component,
-        degree,
-        split,
-        neighborhood,
-        cycle,
-        tree,
-        path,
-        spine,
-        graphlet,
-        clique,
-
-        # Unary graph transforms
-        complement,
-        local_complement,
-        edge_complement,
-        local_edge_complement,
-        betweenness_centrality,
-        betweenness_centrality_split,
-        betweenness_centrality_hop_split,
-        low_cut_partition,
-        merge,
-        deduplicate,
-        remove_redundant_mapped_subgraphs,
-        combination,
-        union_of_shortest_paths,
-        intersection,
-        intersection_edges,
-
-        # Filters
-        filter_by_number_of_connected_components,
-        filter_by_number_of_nodes,
-        filter_by_number_of_edges,
-        filter_by_node_label,
-        filter_by_edge_label,
-        select_top_by_feature_ranking,
-        connected_components_from_feature_ranking,
-        filter_by_sampling,
-
-        # Binary composition & relabelling
-        binary_combination,
-        binary_intersection,
-        unlabel,
-        prepend_label,
-        restore_label,
-        name,
-    ]
-
     for _op in _AG_OPERATORS:
         try:
             register_operator(getattr(_op, "__name__", None))(_op)

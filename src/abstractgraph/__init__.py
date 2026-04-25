@@ -74,6 +74,8 @@ __all__ = [
     "display_decomposition_graph",
     "RandomGraphConstructor",
     "ArtificialGraphDatasetConstructor",
+    "get_directed_support",
+    "get_operator_registry",
     "remove_redundant_mapped_subgraphs",
     "number_of_interpretation_graph_nodes",
     "number_of_interpretation_graph_edges",

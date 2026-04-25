@@ -64,6 +64,54 @@ ag = graph_to_abstract_graph(graph, decomposition_function=df, nbits=12)
   `filter_by_number_of_nodes`, `filter_by_number_of_edges`,
   `filter_by_number_of_connected_components`, `filter_by_node_label`
 
+## Directedness support
+
+Graph directedness is owned by the NetworkX graph type: use `nx.Graph` for
+undirected graphs and `nx.DiGraph` for directed graphs. Operators do not add a
+second directedness parameter. Instead, every built-in operator declares a
+`directed_support` metadata value that explains how it handles directed inputs.
+
+The supported values are:
+
+- `agnostic`
+  Higher-order or control-flow operators that do not inspect topology directly.
+  They validate and compose the support of their child operators.
+- `preserve`
+  Operators that accept directed and undirected graphs and preserve the current
+  mapped-subgraph edge orientation.
+- `weak`
+  Operators that accept directed graphs but intentionally use weak or
+  undirected connectivity semantics for the relevant structural step.
+- `directed`
+  Operators that use directed semantics when the base graph is directed and
+  undirected semantics when the base graph is undirected.
+- `undirected_only`
+  Operators whose semantics are undirected in this package. They raise a clear
+  `ValueError` when used on a directed base graph.
+
+Examples:
+
+```python
+from abstractgraph.operators import clique, connected_component, cycle
+
+connected_component.directed_support  # "weak"
+cycle.directed_support                # "directed"
+clique.directed_support               # "undirected_only"
+```
+
+Curried operator instances keep the same metadata. Use
+`get_directed_support()` when inspecting a partially applied operator, because
+`toolz.curry` stores the metadata on the wrapped function:
+
+```python
+from abstractgraph.operators import get_directed_support
+
+get_directed_support(clique(number_of_nodes=3))  # "undirected_only"
+```
+
+Use `get_operator_registry()` when you need to inspect or document the built-in
+operators programmatically.
+
 ## XML round-trip
 
 Operators can be serialized through `abstractgraph.xml`.

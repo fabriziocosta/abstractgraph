@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import networkx as nx
 import numpy as np
+import pytest
 
 import abstractgraph.operators as ops
 from abstractgraph.graphs import (
@@ -222,3 +223,22 @@ def test_local_edge_complement_preserves_directed_orientation() -> None:
     assert len(mapped) == 1
     assert mapped[0].is_directed()
     assert set(mapped[0].edges()) == {(2, 0)}
+
+
+def test_operator_registry_declares_directed_support() -> None:
+    registry = ops.get_operator_registry()
+    assert registry
+    assert all(getattr(operator, "directed_support", None) for operator in registry)
+    assert ops.get_directed_support(ops.clique(number_of_nodes=3)) == "undirected_only"
+
+
+def test_undirected_only_operator_rejects_directed_base_graph() -> None:
+    graph = nx.DiGraph()
+    graph.add_node(0, label="a", attribute=np.array([1.0]))
+    graph.add_node(1, label="b", attribute=np.array([1.0]))
+    graph.add_edge(0, 1, label="x")
+
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    with pytest.raises(ValueError, match="undirected base graphs"):
+        ops.clique()(ag)
