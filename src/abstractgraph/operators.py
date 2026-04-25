@@ -7,13 +7,13 @@
 # HIGHER ORDER OPERATORS: add  compose  forward_compose  compose_product
 # CONDITIONAL OPERATORS: if_then_else  if_then_elif_else
 # ITERATION OPERATORS: for_loop  while_loop
-# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_associations  intersection  combination  union_of_shortest_paths
+# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_mapped_subgraphs  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  connected_components_from_feature_ranking  filter_by_sampling
 # BINARY OPERATORS:  binary_combination  binary_intersection
 # BASE GRAPH OPERATORS: unlabel  prepend_label  restore_label
-# SCALAR OPERATORS: number_of_image_graph_nodes  number_of_image_graph_edges  quantile_number_of_subgraph_nodes  quantile_number_of_subgraph_edges  max_number_of_subgraph_nodes  min_number_of_subgraph_nodes  max_number_of_subgraph_edges  min_number_of_subgraph_edges
+# SCALAR OPERATORS: number_of_interpretation_graph_nodes  number_of_interpretation_graph_edges  quantile_number_of_subgraph_nodes  quantile_number_of_subgraph_edges  max_number_of_subgraph_nodes  min_number_of_subgraph_nodes  max_number_of_subgraph_edges  min_number_of_subgraph_edges
 #====================================================================================================
 
 import networkx as nx
@@ -3619,17 +3619,8 @@ def deduplicate(
 
     return out_abstract_graph
 
-# Legacy alias for backward compatibility; prefer deduplicate.
 @curry
-def unique(
-    abstract_graph: 'AbstractGraph',
-) -> 'AbstractGraph':
-    """Deprecated alias for deduplicate."""
-    return deduplicate(abstract_graph=abstract_graph)
-
-#--------------------------------------------------------------------------------
-@curry
-def remove_redundant_associations(
+def remove_redundant_mapped_subgraphs(
     abstract_graph: 'AbstractGraph',
 ) -> 'AbstractGraph':
     """Remove interpretation nodes whose mapped subgraphs are strictly covered by larger ones.
@@ -3653,19 +3644,19 @@ def remove_redundant_associations(
         u, v = edge
         return (u, v) if is_directed else frozenset((u, v))
 
-    image_nodes_data = list(abstract_graph.interpretation_graph.nodes(data=True))
-    assoc_cache = {}
-    for old_id, data in image_nodes_data:
+    interpretation_nodes_data = list(abstract_graph.interpretation_graph.nodes(data=True))
+    mapped_subgraph_cache = {}
+    for old_id, data in interpretation_nodes_data:
         mapped_subgraph = get_mapped_subgraph(data)
         if not is_simple_graph(mapped_subgraph):
             mapped_subgraph = _empty_simple_graph_for(abstract_graph.base_graph)
         nodes = set(mapped_subgraph.nodes())
         edges = {edge_key(e) for e in mapped_subgraph.edges()}
-        assoc_cache[old_id] = (mapped_subgraph, nodes, edges, data)
+        mapped_subgraph_cache[old_id] = (mapped_subgraph, nodes, edges, data)
 
     def is_strictly_covered(smaller_id, larger_id):
-        _a_assoc, a_nodes, a_edges, _a_data = assoc_cache[smaller_id]
-        _b_assoc, b_nodes, b_edges, _b_data = assoc_cache[larger_id]
+        _a_mapped_subgraph, a_nodes, a_edges, _a_data = mapped_subgraph_cache[smaller_id]
+        _b_mapped_subgraph, b_nodes, b_edges, _b_data = mapped_subgraph_cache[larger_id]
         if not a_nodes.issubset(b_nodes):
             return False
         if not a_edges.issubset(b_edges):
@@ -3673,7 +3664,7 @@ def remove_redundant_associations(
         return (a_nodes != b_nodes) or (a_edges != b_edges)
 
     redundant_ids = set()
-    old_ids = [old_id for old_id, _data in image_nodes_data]
+    old_ids = [old_id for old_id, _data in interpretation_nodes_data]
     for i, old_id in enumerate(old_ids):
         for j, other_id in enumerate(old_ids):
             if i == j:
@@ -3686,7 +3677,7 @@ def remove_redundant_associations(
 
     old_to_new = {}
     for old_id in kept_old_ids:
-        mapped_subgraph, _nodes, _edges, data = assoc_cache[old_id]
+        mapped_subgraph, _nodes, _edges, data = mapped_subgraph_cache[old_id]
         meta = dict(data.get("meta", {}))
         new_id = out_abstract_graph._add_interpretation_node(mapped_subgraph=mapped_subgraph.copy(), meta=meta)
         for attr_name in ("label", "attribute"):
@@ -3699,15 +3690,6 @@ def remove_redundant_associations(
             out_abstract_graph.interpretation_graph.add_edge(old_to_new[u], old_to_new[v], **edata)
 
     return out_abstract_graph
-
-
-@curry
-def remove_redundant_mapped_subgraphs(
-    abstract_graph: 'AbstractGraph',
-) -> 'AbstractGraph':
-    """Canonical alias for remove_redundant_associations."""
-    return remove_redundant_associations(abstract_graph=abstract_graph)
-
 #--------------------------------------------------------------------------------    
 @curry
 def intersection(
@@ -4168,15 +4150,15 @@ def intersection_edges(
 
                 # Flag to decide whether to add an edge from u to v.
                 add_edge = shared_count >= size_threshold
-                connected_by_preimage_edge = False
+                connected_by_base_edge = False
 
                 if accept_connection_by_edge and not add_edge:
-                    # Check for any pre_image edge between nodes_u and nodes_v.
+                    # Check for any base edge between nodes_u and nodes_v.
                     for node_u in nodes_u:
                         for node_v in nodes_v:
                             if pre_img.has_edge(node_u, node_v):
                                 add_edge = True
-                                connected_by_preimage_edge = True
+                                connected_by_base_edge = True
                                 break
                         if add_edge:
                             break
@@ -4185,8 +4167,8 @@ def intersection_edges(
                     out_abstract_graph.interpretation_graph.add_edge(
                         u,
                         v,
-                        shared_preimage_nodes=shared_count,
-                        connected_by_preimage_edge=connected_by_preimage_edge,
+                        shared_base_nodes=shared_count,
+                        connected_by_base_edge=connected_by_base_edge,
                     )
     
     return out_abstract_graph
@@ -5394,49 +5376,12 @@ def name(text: str = "default"):
 # SCALAR OPERATORS
 #====================================================================================================
 @curry
-def number_of_image_graph_nodes(
-    abstract_graph: 'AbstractGraph',
-    param=None
-) -> int:
-    """Deprecated alias for counting interpretation nodes.
-    Summary
-        Return the total number of nodes in the interpretation graph of the AbstractGraph.
-
-    Parameters
-        abstract_graph : AbstractGraph
-            The input graph.
-
-    Returns
-        int : number of interpretation nodes.
-    """
-    return abstract_graph.interpretation_graph.number_of_nodes()
-
-
-@curry
 def number_of_interpretation_graph_nodes(
     abstract_graph: 'AbstractGraph',
     param=None
 ) -> int:
     """Count the number of interpretation nodes."""
     return abstract_graph.interpretation_graph.number_of_nodes()
-
-
-def number_of_image_graph_edges(
-    abstract_graph: 'AbstractGraph',
-    param=None
-) -> int:
-    """Deprecated alias for counting interpretation edges.
-    Summary
-        Return the total number of edges in the interpretation graph of the AbstractGraph.
-
-    Parameters
-        abstract_graph : AbstractGraph
-            The input graph.
-
-    Returns
-        int : number of interpretation edges.
-    """
-    return abstract_graph.interpretation_graph.number_of_edges()
 
 
 def number_of_interpretation_graph_edges(
@@ -5596,8 +5541,7 @@ try:
         low_cut_partition,
         merge,
         deduplicate,
-        remove_redundant_associations,
-        unique,  # legacy alias
+        remove_redundant_mapped_subgraphs,
         combination,
         union_of_shortest_paths,
         intersection,

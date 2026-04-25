@@ -694,7 +694,7 @@ def display(
     # Draw the abstract graph (with x_offset)
     abstract_edgecolors = []
     for _node, data in abstract_graph.interpretation_graph.nodes(data=True):
-        mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
+        mapped_subgraph = data.get("mapped_subgraph")
         if is_simple_graph(mapped_subgraph) and mapped_subgraph.number_of_nodes() > 0:
             abstract_edgecolors.append("black")
         else:
@@ -713,7 +713,7 @@ def display(
     final_pos_abstract = {node: (x + x_offset, y) for node, (x, y) in pos_abstract.items()}
 
     for anode, adata in abstract_graph.interpretation_graph.nodes(data=True):
-        subg = adata.get("mapped_subgraph", adata.get("association"))
+        subg = adata.get("mapped_subgraph")
         if subg is None:
             continue
         # Ensure qnode exists in the final positions (handles empty abstract graph case)
@@ -1175,7 +1175,7 @@ def display_mappings(
     mapping_dict: Dict[Any, Dict[Tuple[int, Optional[str]], List[nx.Graph]]] = {}
     label_to_operator_text: Dict[Any, Optional[str]] = {}
     for node, data in abstract_graph.interpretation_graph.nodes(data=True):
-        mapped_subgraph = data.get("mapped_subgraph", data.get("association"))
+        mapped_subgraph = data.get("mapped_subgraph")
         if mapped_subgraph is None:
             continue
         label = data.get("label")

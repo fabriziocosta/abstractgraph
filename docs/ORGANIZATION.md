@@ -28,10 +28,54 @@ For the semantic role of this repository, see [../README.md](../README.md).
 
 - [README.md](README.md)
 - [OPERATORS.md](OPERATORS.md)
+- [HASHING.md](HASHING.md)
 - [VECTORIZATION.md](VECTORIZATION.md)
 - [WHITE_PAPER.md](WHITE_PAPER.md)
-- [RELEASE_TERMINOLOGY_MIGRATION.md](RELEASE_TERMINOLOGY_MIGRATION.md)
-- [MIGRATION_TERMINOLOGY.md](MIGRATION_TERMINOLOGY.md)
+
+## Install
+
+Standalone editable install:
+
+```bash
+python -m pip install -e .
+```
+
+When working inside the `abstractgraph-ecosystem` superproject, install this
+repository first so sibling packages can import the core API:
+
+```bash
+python -m pip install -e repos/abstractgraph --no-deps
+```
+
+Use `--no-deps` in the superproject when dependencies are managed by the shared
+environment. Omit it for a standalone checkout when pip should resolve runtime
+dependencies.
+
+## Dependencies
+
+Runtime dependencies declared in `pyproject.toml`:
+
+- `networkx`
+- `numpy`
+- `scipy`
+- `joblib`
+- `scikit-learn`
+- `matplotlib`
+- `toolz`
+
+`display_decomposition_graph` uses Graphviz through `pygraphviz` when rendering
+operator decomposition graphs. Install Graphviz and `pygraphviz` in the active
+environment if those visualizations are needed.
+
+## Caveats
+
+- This is the foundational package. Do not depend on sibling repositories from
+  core modules unless the dependency direction is intentionally changed at the
+  ecosystem level.
+- Bounded graph hashes are intended to be stable feature identifiers, not
+  cryptographic hashes.
+- Graphviz rendering depends on native libraries; prefer conda-forge packages
+  for `graphviz` and `pygraphviz` when using conda environments.
 
 ## Notebooks
 
@@ -70,6 +114,6 @@ Reference notebook:
 ## Local Validation
 
 ```bash
-python -m pip install -e . --no-deps
+python -m pip install -e .
 python scripts/smoke_test.py
 ```

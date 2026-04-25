@@ -1,6 +1,5 @@
 """Core AbstractGraph data structure and conversion utilities."""
 
-import warnings
 from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -43,26 +42,14 @@ def make_simple_graph_like(graph: Any, *, directed: Optional[bool] = None) -> nx
     return make_simple_graph(directed=bool(directed))
 
 
-def _warn_deprecated(old_name: str, new_name: str) -> None:
-    warnings.warn(
-        f"`{old_name}` is deprecated and will be removed in a future release; use `{new_name}` instead.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-
-
 def get_mapped_subgraph(node_data: Dict[str, Any]) -> Optional[nx.Graph]:
-    """Return the canonical mapped subgraph payload with legacy fallback."""
-    mapped_subgraph = node_data.get("mapped_subgraph")
-    if mapped_subgraph is not None:
-        return mapped_subgraph
-    return node_data.get("association")
+    """Return the canonical mapped subgraph payload."""
+    return node_data.get("mapped_subgraph")
 
 
 def set_mapped_subgraph(node_data: Dict[str, Any], mapped_subgraph: Optional[nx.Graph]) -> None:
-    """Write both canonical and legacy payload keys during the migration window."""
+    """Write the canonical mapped subgraph payload key."""
     node_data["mapped_subgraph"] = mapped_subgraph
-    node_data["association"] = mapped_subgraph
 
 
 def get_interpretation_label_to_mapped_subgraphs(
@@ -143,26 +130,6 @@ class AbstractGraph:
         elif abstract_graph is not None:
             self.from_abstract_graph(abstract_graph)
 
-    @property
-    def preimage_graph(self) -> nx.Graph:
-        _warn_deprecated("preimage_graph", "base_graph")
-        return self.base_graph
-
-    @preimage_graph.setter
-    def preimage_graph(self, value: nx.Graph) -> None:
-        _warn_deprecated("preimage_graph", "base_graph")
-        self.base_graph = value
-
-    @property
-    def image_graph(self) -> nx.Graph:
-        _warn_deprecated("image_graph", "interpretation_graph")
-        return self.interpretation_graph
-
-    @image_graph.setter
-    def image_graph(self, value: nx.Graph) -> None:
-        _warn_deprecated("image_graph", "interpretation_graph")
-        self.interpretation_graph = value
-
     def copy(self) -> "AbstractGraph":
         """Return a deep copy of this AbstractGraph."""
         new = AbstractGraph(
@@ -193,26 +160,17 @@ class AbstractGraph:
         self.interpretation_graph.add_node(
             node_id,
             mapped_subgraph=mapped_subgraph,
-            association=mapped_subgraph,
             label=None,
             attribute=None,
             meta=meta or {},
         )
         return node_id
 
-    def _add_image_node(self, association: nx.Graph, meta: Optional[dict] = None) -> int:
-        _warn_deprecated("_add_image_node", "_add_interpretation_node")
-        return self._add_interpretation_node(mapped_subgraph=association, meta=meta)
-
     def create_default_interpretation_node(self) -> "AbstractGraph":
         """Create a single interpretation node mapped to the full base graph."""
         mapped_subgraph = self.base_graph.copy()
         self._add_interpretation_node(mapped_subgraph=mapped_subgraph)
         return self
-
-    def create_default_image_node(self) -> "AbstractGraph":
-        _warn_deprecated("create_default_image_node", "create_default_interpretation_node")
-        return self.create_default_interpretation_node()
 
     def create_interpretation_node_with_subgraph_from_nodes(
         self, nodes: Iterable[Any], meta: Optional[dict] = None
@@ -221,13 +179,6 @@ class AbstractGraph:
         mapped_subgraph = self.base_graph.subgraph(set(nodes)).copy()
         self._add_interpretation_node(mapped_subgraph=mapped_subgraph, meta=meta)
 
-    def create_image_node_with_subgraph_from_nodes(self, nodes: Iterable[Any], meta: Optional[dict] = None) -> None:
-        _warn_deprecated(
-            "create_image_node_with_subgraph_from_nodes",
-            "create_interpretation_node_with_subgraph_from_nodes",
-        )
-        self.create_interpretation_node_with_subgraph_from_nodes(nodes, meta=meta)
-
     def create_interpretation_node_with_subgraph_from_edges(
         self, edges: Iterable[Tuple[Any, Any]], meta: Optional[dict] = None
     ) -> None:
@@ -235,29 +186,11 @@ class AbstractGraph:
         mapped_subgraph = self.base_graph.edge_subgraph(list(edges)).copy()
         self._add_interpretation_node(mapped_subgraph=mapped_subgraph, meta=meta)
 
-    def create_image_node_with_subgraph_from_edges(
-        self, edges: Iterable[Tuple[Any, Any]], meta: Optional[dict] = None
-    ) -> None:
-        _warn_deprecated(
-            "create_image_node_with_subgraph_from_edges",
-            "create_interpretation_node_with_subgraph_from_edges",
-        )
-        self.create_interpretation_node_with_subgraph_from_edges(edges, meta=meta)
-
     def create_interpretation_node_with_subgraph_from_subgraph(
         self, subgraph: nx.Graph, meta: Optional[dict] = None
     ) -> None:
         """Create an interpretation node from a supplied base subgraph."""
         self._add_interpretation_node(mapped_subgraph=subgraph, meta=meta)
-
-    def create_image_node_with_subgraph_from_subgraph(
-        self, subgraph: nx.Graph, meta: Optional[dict] = None
-    ) -> None:
-        _warn_deprecated(
-            "create_image_node_with_subgraph_from_subgraph",
-            "create_interpretation_node_with_subgraph_from_subgraph",
-        )
-        self.create_interpretation_node_with_subgraph_from_subgraph(subgraph, meta=meta)
 
     def apply_label_function(self) -> "AbstractGraph":
         """Apply the label function to each interpretation node."""
@@ -308,13 +241,8 @@ class AbstractGraph:
             associated_interpretation_nodes = inverse_mappings.get(base_node_id, set())
             induced_subgraph = self.interpretation_graph.subgraph(associated_interpretation_nodes).copy()
             self.base_graph.nodes[base_node_id]["inverse_mapping"] = induced_subgraph
-            self.base_graph.nodes[base_node_id]["inverse_association"] = induced_subgraph
             result_subgraphs.append(induced_subgraph)
         return result_subgraphs
-
-    def get_preimage_nodes_inverse_associations(self) -> List[nx.Graph]:
-        _warn_deprecated("get_preimage_nodes_inverse_associations", "get_base_nodes_inverse_mappings")
-        return self.get_base_nodes_inverse_mappings()
 
     def get_interpretation_nodes_mapped_subgraphs(self) -> List[nx.Graph]:
         """Return the mapped subgraphs for all interpretation nodes."""
@@ -333,22 +261,16 @@ class AbstractGraph:
             copy=copy,
         )
 
-    def get_image_nodes_associations(self) -> List[nx.Graph]:
-        _warn_deprecated("get_image_nodes_associations", "get_interpretation_nodes_mapped_subgraphs")
-        return self.get_interpretation_nodes_mapped_subgraphs()
-
     def __add__(self, other: object) -> "AbstractGraph":
         """Combine two AbstractGraphs."""
         if other is None or other == 0:
             return self
         if not isinstance(other, AbstractGraph):
-            if not (hasattr(other, "base_graph") or hasattr(other, "preimage_graph")):
+            if not (hasattr(other, "base_graph") and hasattr(other, "interpretation_graph")):
                 return NotImplemented
 
-        other_base = other.base_graph if hasattr(other, "base_graph") else other.preimage_graph
-        other_interpretation = (
-            other.interpretation_graph if hasattr(other, "interpretation_graph") else other.image_graph
-        )
+        other_base = other.base_graph
+        other_interpretation = other.interpretation_graph
 
         new_qg = AbstractGraph(
             label_function=self.label_function,
@@ -370,9 +292,7 @@ class AbstractGraph:
             for node, data in graph.nodes(data=True):
                 attr_parts = []
                 for key, value in data.items():
-                    if key == "association" and "mapped_subgraph" in data:
-                        continue
-                    if key in {"mapped_subgraph", "association"} and is_simple_graph(value):
+                    if key == "mapped_subgraph" and is_simple_graph(value):
                         subgraph_str = graph_repr(value, indent=indent + 2)
                         attr_parts.append(f"{key}:\n{subgraph_str}")
                     else:
@@ -409,7 +329,7 @@ class AbstractGraph:
             next_node_id += 1
             graph_out.add_node(
                 interpretation_id,
-                **{k: v for k, v in data.items() if k not in {"mapped_subgraph", "association"}},
+                **{k: v for k, v in data.items() if k != "mapped_subgraph"},
                 kind="interpretation",
                 original_id=interpretation_node,
             )

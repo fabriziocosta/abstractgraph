@@ -230,8 +230,7 @@ interpretation graph, while the vector is only the downstream ML encoding.
 
 ## Current Limitations and Notes
 
-- Some compatibility aliases still exist in the API for one migration window.
-- The default label function hashes the full associated subgraph, so feature
+- The default label function hashes the full mapped subgraph, so feature
   identity depends on the graph hashing scheme.
 - Collisions are unavoidable in bounded hashing.
 - The graph-level transformer simply sums node rows, so large graphs naturally

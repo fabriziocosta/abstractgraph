@@ -22,21 +22,15 @@ The core package is responsible for:
 - hashing and vectorizing subgraph structure
 - adapting non-graph inputs into base NetworkX graphs
 
-## Ecosystem
+## Local organization
 
-Sibling repositories:
+For this repository's install commands, dependencies, caveats, validation, and
+notebook layout, see [ORGANIZATION.md](ORGANIZATION.md).
 
-- `abstractgraph`
-  Path: `/home/fabrizio/work/abstractgraph`
-- `abstractgraph-ml`
-  Path: `/home/fabrizio/work/abstractgraph-ml`
-- `abstractgraph-generative`
-  Path: `/home/fabrizio/work/abstractgraph-generative`
-- `abstractgraph-graphicalizer`
-  Path: `/home/fabrizio/work/abstractgraph-graphicalizer`
-
-See [../ECOSYSTEM.md](../ECOSYSTEM.md) for the install order and dependency
-direction.
+For ecosystem-level repository roles, dependency direction, and submodule
+workflow, see the superproject organization guide at
+`../../docs/ORGANIZATION.md` when this repo is checked out under
+`abstractgraph-ecosystem/repos/abstractgraph`.
 
 ## Module map
 
@@ -89,10 +83,9 @@ direction.
 ## Related docs
 
 - [OPERATORS.md](OPERATORS.md)
+- [HASHING.md](HASHING.md)
 - [VECTORIZATION.md](VECTORIZATION.md)
 - [WHITE_PAPER.md](WHITE_PAPER.md)
-- [RELEASE_TERMINOLOGY_MIGRATION.md](RELEASE_TERMINOLOGY_MIGRATION.md)
-- [MIGRATION_TERMINOLOGY.md](MIGRATION_TERMINOLOGY.md)
 
 ## Notebook sequence
 

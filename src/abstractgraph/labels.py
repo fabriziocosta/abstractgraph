@@ -10,10 +10,7 @@ DEFAULT_NBITS = 14
 
 
 def _get_mapped_subgraph(node_attrs: dict) -> Optional[nx.Graph]:
-    mapped_subgraph = node_attrs.get("mapped_subgraph")
-    if mapped_subgraph is not None:
-        return mapped_subgraph
-    return node_attrs.get("association")
+    return node_attrs.get("mapped_subgraph")
 
 #==========================================================================================
 # Label functions for AbstractGraph
@@ -191,7 +188,6 @@ def intersection_edge_function(abstract_graph: "AbstractGraph") -> "AbstractGrap
                     node1,
                     node2,
                     shared_base_nodes=shared_count,
-                    shared_preimage_nodes=shared_count,
                 )
     return abstract_graph
 
