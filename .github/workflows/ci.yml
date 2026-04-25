@@ -18,5 +18,7 @@ jobs:
         run: python -m pip install -e .
       - name: Compile package
         run: python -m py_compile src/abstractgraph/*.py src/abstractgraph/to_graph/*.py
+      - name: Check notebook outputs
+        run: python scripts/clean_notebook_outputs.py --check
       - name: Run smoke test
         run: python scripts/smoke_test.py
