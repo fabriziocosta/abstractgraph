@@ -129,6 +129,27 @@ def test_directed_base_graph_survives_core_pipeline_and_export() -> None:
     assert not materialized.has_edge(1, 0)
 
 
+def test_add_preserves_directed_base_graph() -> None:
+    graph = nx.DiGraph()
+    graph.add_node(0, label="a", attribute=np.array([1.0]))
+    graph.add_node(1, label="b", attribute=np.array([2.0]))
+    graph.add_node(2, label="c", attribute=np.array([3.0]))
+    graph.add_edge(0, 1, label="x")
+    graph.add_edge(1, 2, label="y")
+
+    ag = AbstractGraph(graph=graph)
+    ag.create_default_interpretation_node()
+
+    out = ops.add(
+        ops.neighborhood(radius=(0, 1)),
+        ops.path(number_of_edges=1),
+    )(ag)
+
+    assert out.base_graph.is_directed()
+    assert out.interpretation_graph.number_of_nodes() > 0
+    assert all(mapped.is_directed() for mapped in out.get_interpretation_nodes_mapped_subgraphs())
+
+
 def test_hash_graph_distinguishes_edge_orientation() -> None:
     undirected = nx.Graph()
     undirected.add_node(0, label="a")

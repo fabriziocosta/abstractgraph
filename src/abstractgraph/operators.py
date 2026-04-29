@@ -651,12 +651,8 @@ def add(*decomposition_functions, dedup: bool = True):
               duplicate structures unless `__add__` handles deduplication.
             - Exceptions raised in any decomposition function propagate to the caller.
         """
-        # Preserve the functional settings from the input graph
-        base = AbstractGraph(
-            label_function=abstract_graph.label_function,
-            attribute_function=abstract_graph.attribute_function,
-            edge_function=abstract_graph.edge_function,
-        )
+        # Preserve the base graph directedness and functional settings.
+        base = _new_like_abstract_graph(abstract_graph)
 
         include_self = _get_add_include_self()
         existing_chain = _get_source_chain_xml()
