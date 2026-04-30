@@ -150,6 +150,44 @@ def test_add_preserves_directed_base_graph() -> None:
     assert all(mapped.is_directed() for mapped in out.get_interpretation_nodes_mapped_subgraphs())
 
 
+def test_get_reachable_nodes_bfs_direction_modes_on_directed_graph() -> None:
+    graph = nx.DiGraph()
+    graph.add_edges_from([(0, 1), (1, 2), (3, 1)])
+
+    assert set(ops.get_reachable_nodes_bfs(graph, 1, cutoff=1)) == {1, 2}
+    assert set(ops.get_reachable_nodes_bfs(graph, 1, cutoff=1, direction="out")) == {1, 2}
+    assert set(ops.get_reachable_nodes_bfs(graph, 1, cutoff=1, direction="in")) == {0, 1, 3}
+    assert set(ops.get_reachable_nodes_bfs(graph, 1, cutoff=1, direction="weak")) == {0, 1, 2, 3}
+    assert set(ops.get_reachable_nodes_bfs(graph, 1, cutoff=1, direction="both")) == {0, 1, 2, 3}
+
+
+def test_neighborhood_weak_direction_preserves_directed_induced_subgraph() -> None:
+    graph = nx.DiGraph()
+    graph.add_node(0, label="a", attribute=np.array([1.0]))
+    graph.add_node(1, label="b", attribute=np.array([2.0]))
+    graph.add_node(2, label="c", attribute=np.array([3.0]))
+    graph.add_edge(0, 1, label="x")
+    graph.add_edge(1, 2, label="y")
+
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1, 2])
+
+    out = ops.neighborhood(radius=1, direction="weak")(ag)
+    mapped_subgraphs = out.get_interpretation_nodes_mapped_subgraphs()
+    full_weak_neighborhoods = [
+        mapped
+        for mapped in mapped_subgraphs
+        if set(mapped.nodes()) == {0, 1, 2}
+    ]
+
+    assert full_weak_neighborhoods
+    mapped = full_weak_neighborhoods[0]
+    assert mapped.is_directed()
+    assert sorted(mapped.edges()) == [(0, 1), (1, 2)]
+    assert not mapped.has_edge(1, 0)
+    assert not mapped.has_edge(2, 1)
+
+
 def test_hash_graph_distinguishes_edge_orientation() -> None:
     undirected = nx.Graph()
     undirected.add_node(0, label="a")

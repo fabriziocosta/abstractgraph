@@ -1885,7 +1885,8 @@ def split(
 def get_reachable_nodes_bfs(
     graph: nx.Graph,
     source: Any,
-    cutoff: int
+    cutoff: int,
+    direction: str = "out",
     ) -> List[Any]:
     """Return nodes within a given BFS radius from a source node.
 
@@ -1897,6 +1898,11 @@ def get_reachable_nodes_bfs(
         Node ID to start the BFS from.
     cutoff : int
         Maximum hop distance to include (must be ≥ 0).
+    direction : {"out", "in", "weak", "both"}, default "out"
+        Traversal direction for directed graphs. ``"out"`` preserves the
+        previous successor-only behavior, ``"in"`` follows predecessors, and
+        ``"weak"``/``"both"`` traverses both incoming and outgoing edges while
+        leaving the returned induced subgraph directed.
 
     Returns
     -------
@@ -1918,15 +1924,26 @@ def get_reachable_nodes_bfs(
 
     if cutoff == 0:
         return [source]
-    
-    path_lengths = nx.single_source_shortest_path_length(graph, source, cutoff=cutoff)
+
+    if direction not in {"out", "in", "weak", "both"}:
+        raise ValueError("direction must be one of {'out', 'in', 'weak', 'both'}")
+
+    traversal_graph = graph
+    if nx.is_directed(graph):
+        if direction == "in":
+            traversal_graph = graph.reverse(copy=False)
+        elif direction in {"weak", "both"}:
+            traversal_graph = graph.to_undirected(as_view=True)
+
+    path_lengths = nx.single_source_shortest_path_length(traversal_graph, source, cutoff=cutoff)
     return list(path_lengths.keys())
 
 
 @curry
 def neighborhood(
     abstract_graph: 'AbstractGraph',
-    radius=(0,1)
+    radius=(0,1),
+    direction: str = "out",
 ) -> 'AbstractGraph':
     """Emit interpretation nodes for BFS neighborhoods of each node in current mapped subgraphs.
     Summary
@@ -1942,6 +1959,11 @@ def neighborhood(
     Parameters
         radius : int | tuple[int,int], default (0,1)
             Inclusive radius bounds. If a single int is given, interpreted as (r,r).
+        direction : {"out", "in", "weak", "both"}, default "out"
+            Traversal direction for directed graphs. ``"out"`` follows
+            successors, ``"in"`` follows predecessors, and ``"weak"``/``"both"``
+            uses both incoming and outgoing edges to choose neighborhood nodes.
+            Emitted mapped subgraphs preserve the original directed edges.
 
     Algorithm
         - Normalize radius bounds using value_to_2tuple().
@@ -1989,18 +2011,28 @@ def neighborhood(
         - For very large radius ranges, output size can exceed memory quickly.
     """
     radius = value_to_2tuple(radius)
+    if direction not in {"out", "in", "weak", "both"}:
+        raise ValueError("direction must be one of {'out', 'in', 'weak', 'both'}")
+
     def decompose(subgraph):
         components = []
         for r in range(min(radius), max(radius) + 1):
             for source in subgraph.nodes():
-                components.append(get_reachable_nodes_bfs(subgraph, source, cutoff=r))
+                components.append(
+                    get_reachable_nodes_bfs(
+                        subgraph,
+                        source,
+                        cutoff=r,
+                        direction=direction,
+                    )
+                )
         return components
 
     return apply_local_node_decomposition(
         abstract_graph,
         decompose,
         source_operator=neighborhood,
-        params={"radius": radius},
+        params={"radius": radius, "direction": direction},
     )
 
 #--------------------------------------------------------------------------------
