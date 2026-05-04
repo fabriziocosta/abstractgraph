@@ -12,6 +12,8 @@ from abstractgraph.labels import (
     graph_hash_label_function_factory,
     mean_attribute_function,
     name_hash_label_function_factory,
+    node_histogram_hash_label_function_factory,
+    node_histogram_values_hash_label_function_factory,
     null_edge_function,
 )
 from abstractgraph.hashing import hash_graph
@@ -474,6 +476,10 @@ def graph_to_abstract_graph(
             label_function = graph_hash_label_function_factory(nbits)
         elif label_mode == "operator_hash":
             label_function = name_hash_label_function_factory(nbits)
+        elif label_mode == "histogram":
+            label_function = node_histogram_hash_label_function_factory(nbits)
+        elif label_mode == "histogram_values":
+            label_function = node_histogram_values_hash_label_function_factory(nbits)
         else:
             raise ValueError(f"Unknown label_mode: {label_mode}")
     abstract_graph = AbstractGraph(graph=graph, label_function=label_function)

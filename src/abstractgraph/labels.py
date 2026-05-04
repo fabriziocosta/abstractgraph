@@ -3,8 +3,8 @@
 import networkx as nx
 import numpy as np
 from typing import Optional, Callable, Any, List, Iterable, Tuple, Dict, Set
-from abstractgraph.hashing import hash_bounded, hash_graph
-
+from abstractgraph.hashing import hash_value, hash_sequence, hash_set, hash_bounded, hash_graph
+from collections import defaultdict
 
 DEFAULT_NBITS = 14
 
@@ -61,7 +61,64 @@ def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> C
     label_fn.label_mode = "graph_structure_hash"
     return label_fn
 
+def node_histogram_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
+    """
+    Build a label function that hashes only the histogram of node labels.
+    A mapped subgraph with node labels A, B, A will receive a hashed label of hash([A,A,B])
+    regardless of the graph structure, but specific for the operator name. 
 
+    Args:
+        nbits: The number of bits for the hash output (default: 14).
+
+    Returns:
+        Callable[[dict], int]: Label function using structure-only hashing.
+    """
+    def label_fn(node_attrs: dict) -> int:
+        # Extract the source function identifier from metadata; default to 'unknown'
+        source = node_attrs.get("meta", {}).get("source_function", "unknown")
+
+        subgraph = _get_mapped_subgraph(node_attrs)
+        if subgraph is None:
+            raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
+
+        # Extract node labels and create a histogram
+        node_labels = [subgraph.nodes[node].get("label", "-") for node in subgraph.nodes]
+        h = hash_sequence([source, hash_set(node_labels)])
+        return hash_bounded(h, nbits=nbits)
+    label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "node_histogram_hash"
+    return label_fn
+
+def node_histogram_values_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
+    """
+    Build a label function that hashes only the values in the histogram of node labels.
+    A mapped subgraph with node labels A, B, A will receive a hashed label of hash([2,1]) 
+    regardless of the graph structure, but specific for the operator name.
+
+    Args:
+        nbits: The number of bits for the hash output (default: 14).
+
+    Returns:
+        Callable[[dict], int]: Label function using structure-only hashing.
+    """
+    def label_fn(node_attrs: dict) -> int:
+        # Extract the source function identifier from metadata; default to 'unknown'
+        source = node_attrs.get("meta", {}).get("source_function", "unknown")
+
+        subgraph = _get_mapped_subgraph(node_attrs)
+        if subgraph is None:
+            raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
+
+        # Extract node labels and create a histogram
+        node_labels = [subgraph.nodes[node].get("label", "-") for node in subgraph.nodes]
+        histogram = defaultdict(int)
+        for label in node_labels:
+            histogram[label] += 1
+        h = hash_sequence([source, hash_set(list(histogram.values()))])
+        return hash_bounded(h, nbits=nbits)
+    label_fn.nbits = nbits # Attach nbits as an attribute
+    label_fn.label_mode = "node_histogram_values_hash"
+    return label_fn
 
 def source_function_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
     """
