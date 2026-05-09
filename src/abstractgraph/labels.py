@@ -114,7 +114,7 @@ def node_histogram_values_hash_label_function_factory(nbits: int = DEFAULT_NBITS
         histogram = defaultdict(int)
         for label in node_labels:
             histogram[label] += 1
-        h = hash_sequence([source, hash_set(list(histogram.values()))])
+        h = hash_sequence([source, hash_sequence(sorted(histogram.values()))])
         return hash_bounded(h, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
     label_fn.label_mode = "node_histogram_values_hash"
