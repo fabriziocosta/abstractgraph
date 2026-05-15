@@ -4262,7 +4262,8 @@ def intersection_edges(
         - Memory: O(1) beyond input graphs and new interpretation-graph edges.
 
     Metadata
-        - Output interpretation-graph edges are unlabeled unless edge_function later annotates them.
+        - Output interpretation-graph edges include ``label`` with the size of
+          the shared base-node intersection.
 
     Interactions
         - Complements decomposition operators: can create higher-level
@@ -4336,6 +4337,7 @@ def intersection_edges(
                     out_abstract_graph.interpretation_graph.add_edge(
                         u,
                         v,
+                        label=shared_count,
                         shared_base_nodes=shared_count,
                         connected_by_base_edge=connected_by_base_edge,
                     )

@@ -150,6 +150,23 @@ def test_add_preserves_directed_base_graph() -> None:
     assert all(mapped.is_directed() for mapped in out.get_interpretation_nodes_mapped_subgraphs())
 
 
+def test_intersection_edges_stores_shared_intersection_size_as_label() -> None:
+    graph = nx.path_graph(4)
+    for node in graph.nodes:
+        graph.nodes[node]["label"] = str(node)
+        graph.nodes[node]["attribute"] = np.array([1.0])
+
+    ag = AbstractGraph(graph=graph)
+    ag.create_interpretation_node_with_subgraph_from_nodes([0, 1, 2])
+    ag.create_interpretation_node_with_subgraph_from_nodes([1, 2, 3])
+
+    out = ops.intersection_edges(size_threshold=1)(ag)
+
+    edge_data = next(iter(out.interpretation_graph.edges(data=True)))[2]
+    assert edge_data["label"] == 2
+    assert edge_data["shared_base_nodes"] == 2
+
+
 def test_get_reachable_nodes_bfs_direction_modes_on_directed_graph() -> None:
     graph = nx.DiGraph()
     graph.add_edges_from([(0, 1), (1, 2), (3, 1)])
