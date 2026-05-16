@@ -1312,7 +1312,7 @@ def display_mappings(
         )
         ax.axis("off")
 
-    show_operator_footer = getattr(getattr(abstract_graph, "label_function", None), "label_mode", None) == "operator_hash"
+    show_operator_footer = getattr(getattr(abstract_graph, "label_function", None), "label_mode", None) == "operator"
 
     def _footer_formatter(label: Any) -> Optional[str]:
         if not show_operator_footer:

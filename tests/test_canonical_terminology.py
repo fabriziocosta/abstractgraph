@@ -289,6 +289,29 @@ def test_graph_to_abstract_graph_preserves_edge_label_display_preference() -> No
     assert ag.copy().display_edge_labels is True
 
 
+def test_operator_label_mode_is_canonical_with_legacy_alias() -> None:
+    graph = _make_graph()
+
+    canonical = graph_to_abstract_graph(
+        graph,
+        decomposition_function=ops.node(),
+        nbits=6,
+        label_mode="operator",
+    )
+    legacy = graph_to_abstract_graph(
+        graph,
+        decomposition_function=ops.node(),
+        nbits=6,
+        label_mode="operator_hash",
+    )
+
+    assert canonical.label_function.label_mode == "operator"
+    assert legacy.label_function.label_mode == "operator"
+    assert [
+        data["label"] for _node, data in canonical.interpretation_graph.nodes(data=True)
+    ] == [data["label"] for _node, data in legacy.interpretation_graph.nodes(data=True)]
+
+
 def test_local_edge_complement_preserves_directed_orientation() -> None:
     graph = nx.DiGraph()
     graph.add_nodes_from(

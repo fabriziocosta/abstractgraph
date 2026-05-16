@@ -474,7 +474,7 @@ def graph_to_abstract_graph(
     if label_function is None:
         if label_mode == "graph_hash":
             label_function = graph_hash_label_function_factory(nbits)
-        elif label_mode == "operator_hash":
+        elif label_mode in {"operator", "operator_hash"}:
             label_function = name_hash_label_function_factory(nbits)
         elif label_mode == "histogram":
             label_function = node_histogram_hash_label_function_factory(nbits)

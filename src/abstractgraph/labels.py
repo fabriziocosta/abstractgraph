@@ -184,7 +184,7 @@ def name_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[di
             name = str(name)
         return hash_bounded(name, nbits=nbits)
     label_fn.nbits = nbits # Attach nbits as an attribute
-    label_fn.label_mode = "operator_hash"
+    label_fn.label_mode = "operator"
     return label_fn
 
 #==================================================================================================
