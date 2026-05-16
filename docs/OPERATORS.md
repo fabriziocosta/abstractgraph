@@ -23,6 +23,7 @@ Examples:
 - `cycle()`: cycle mapped subgraphs
 - `clique(number_of_nodes=...)`: clique mapped subgraphs
 - `path(number_of_edges=...)`: bounded simple paths
+- `shortest_path_cover(n_edges=...)`: bounded shortest paths covering all edges
 
 ## Composition helpers
 

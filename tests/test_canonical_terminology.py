@@ -25,6 +25,18 @@ def _make_graph() -> nx.Graph:
     return graph
 
 
+def _undirected_edge_keys(graph: nx.Graph) -> set[frozenset]:
+    return {frozenset(edge) for edge in graph.edges()}
+
+
+def _mapped_undirected_edge_keys(mapped_subgraphs: list[nx.Graph]) -> set[frozenset]:
+    return {
+        frozenset(edge)
+        for mapped in mapped_subgraphs
+        for edge in mapped.edges()
+    }
+
+
 def test_canonical_graph_attributes() -> None:
     ag = AbstractGraph(graph=_make_graph())
     assert set(ag.base_graph.nodes()) == {0, 1, 2}
@@ -617,6 +629,87 @@ def test_scaffold_refactored_directed_operator_regressions() -> None:
     assert meta["source_function"] == "edge_complement"
 
 
+def test_shortest_path_cover_bounds_paths_and_covers_undirected_edges() -> None:
+    graph = nx.path_graph(5)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    out = ops.shortest_path_cover(n_edges=2)(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert mapped
+    assert all(1 <= mapped_subgraph.number_of_edges() <= 2 for mapped_subgraph in mapped)
+    assert _mapped_undirected_edge_keys(mapped) == _undirected_edge_keys(graph)
+    assert any(mapped_subgraph.number_of_edges() == 2 for mapped_subgraph in mapped)
+
+
+def test_shortest_path_cover_materializes_edges_without_chords() -> None:
+    graph = nx.Graph()
+    graph.add_edges_from([(0, 1), (1, 2), (0, 2), (2, 3)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    out = ops.shortest_path_cover(n_edges=2)(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert _mapped_undirected_edge_keys(mapped) == _undirected_edge_keys(graph)
+    assert all(1 <= mapped_subgraph.number_of_edges() <= 2 for mapped_subgraph in mapped)
+    assert all(
+        mapped_subgraph.number_of_edges() != 3
+        for mapped_subgraph in mapped
+        if set(mapped_subgraph.nodes()) == {0, 1, 2}
+    )
+
+
+def test_shortest_path_cover_allows_overlapping_nodes_on_branched_graph() -> None:
+    graph = nx.Graph()
+    graph.add_edges_from([(0, 1), (1, 2), (1, 3), (3, 4)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    out = ops.shortest_path_cover(n_edges=2)(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+    node_counts = {}
+    for mapped_subgraph in mapped:
+        for node in mapped_subgraph.nodes():
+            node_counts[node] = node_counts.get(node, 0) + 1
+
+    assert _mapped_undirected_edge_keys(mapped) == _undirected_edge_keys(graph)
+    assert all(1 <= mapped_subgraph.number_of_edges() <= 2 for mapped_subgraph in mapped)
+    assert any(count > 1 for count in node_counts.values())
+
+
+def test_shortest_path_cover_uses_weak_directed_traversal_and_preserves_edges() -> None:
+    graph = nx.DiGraph()
+    graph.add_edges_from([(0, 1), (2, 1), (2, 3), (3, 2)])
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    out = ops.shortest_path_cover(n_edges=2)(ag)
+    mapped = out.get_interpretation_nodes_mapped_subgraphs()
+
+    assert mapped
+    assert all(mapped_subgraph.is_directed() for mapped_subgraph in mapped)
+    assert {edge for mapped_subgraph in mapped for edge in mapped_subgraph.edges()} == set(graph.edges())
+    assert all(1 <= mapped_subgraph.number_of_edges() <= 2 for mapped_subgraph in mapped)
+
+
+def test_shortest_path_cover_metadata_registry_xml_and_validation() -> None:
+    graph = nx.path_graph(4)
+    ag = AbstractGraph(graph=graph).create_default_interpretation_node()
+
+    out = ops.shortest_path_cover(n_edges=2)(ag)
+    meta = next(iter(out.interpretation_graph.nodes(data=True)))[1]["meta"]
+
+    assert meta["source_function"] == "shortest_path_cover"
+    assert meta["params"] == {"n_edges": 2}
+    assert ops.shortest_path_cover in ops.get_operator_registry()
+    assert ops.get_directed_support(ops.shortest_path_cover(n_edges=2)) == "weak"
+
+    xml = operator_to_xml_string(ops.shortest_path_cover(n_edges=2), pretty=True)
+    rebuilt = operator_from_xml_string(xml)
+    assert operator_to_xml_string(rebuilt, pretty=True) == xml
+
+    with pytest.raises(ValueError, match="n_edges must be an integer >= 1"):
+        ops.shortest_path_cover(n_edges=0)(ag)
+
+
 def test_scaffold_refactored_global_combination_regression() -> None:
     graph = nx.path_graph(3)
     ag = AbstractGraph(graph=graph)
@@ -639,6 +732,7 @@ def test_scaffold_refactored_operator_xml_round_trips() -> None:
         ops.node(),
         ops.edge(),
         ops.clique(number_of_nodes=(2, 3)),
+        ops.shortest_path_cover(n_edges=2),
         ops.forward_compose(ops.edge(), ops.merge(use_edges=True)),
         ops.combination(number_of_elements=(2, 2), distance=(0, 1)),
     ]

@@ -7,7 +7,7 @@
 # HIGHER ORDER OPERATORS: add  compose  forward_compose  compose_product
 # CONDITIONAL OPERATORS: if_then_else  if_then_elif_else
 # ITERATION OPERATORS: for_loop  while_loop
-# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_mapped_subgraphs  intersection  combination  union_of_shortest_paths
+# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  shortest_path_cover  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_mapped_subgraphs  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  connected_components_from_feature_ranking  filter_by_sampling
@@ -2288,6 +2288,143 @@ def path_decomposition_function(subgraph, min_number_of_edges=1, max_number_of_e
     components = list(set(edge_components))
     return components
 
+
+def _path_edge_candidates_from_nodes(subgraph: nx.Graph, path_nodes: List[Any], uncovered_edges: set):
+    """Convert a weak shortest-path node sequence to original graph edges."""
+    selected_edges = []
+    covered_edges = set()
+    directed = nx.is_directed(subgraph)
+    for u, v in zip(path_nodes[:-1], path_nodes[1:]):
+        edge = None
+        if directed:
+            if (u, v) in uncovered_edges and subgraph.has_edge(u, v):
+                edge = (u, v)
+            elif (v, u) in uncovered_edges and subgraph.has_edge(v, u):
+                edge = (v, u)
+            elif subgraph.has_edge(u, v):
+                edge = (u, v)
+            elif subgraph.has_edge(v, u):
+                edge = (v, u)
+        else:
+            if (u, v) in uncovered_edges and subgraph.has_edge(u, v):
+                edge = (u, v)
+            elif (v, u) in uncovered_edges and subgraph.has_edge(v, u):
+                edge = (v, u)
+            elif subgraph.has_edge(u, v):
+                edge = (u, v)
+            elif subgraph.has_edge(v, u):
+                edge = (v, u)
+        if edge is None:
+            return [], set()
+        selected_edges.append(edge)
+        if edge in uncovered_edges:
+            covered_edges.add(edge)
+    return selected_edges, covered_edges
+
+
+def shortest_path_cover_decomposition_function(subgraph, n_edges=3):
+    """Return edge-path components that cover every edge with bounded shortest paths.
+
+    Paths are selected greedily from weak shortest paths, starting preference near
+    the component centroid. Directed inputs use weak traversal for path search
+    while preserving original edge orientation in the returned edge components.
+    """
+    if not isinstance(n_edges, int) or n_edges < 1:
+        raise ValueError("n_edges must be an integer >= 1.")
+    if subgraph.number_of_edges() == 0:
+        return []
+
+    traversal_graph = subgraph.to_undirected(as_view=True) if nx.is_directed(subgraph) else subgraph
+    components = []
+
+    for component_nodes in _connected_components_view(subgraph):
+        component_nodes = set(component_nodes)
+        node_order = [node for node in subgraph.nodes() if node in component_nodes]
+        if len(node_order) < 2:
+            continue
+
+        component_view = traversal_graph.subgraph(node_order)
+        all_paths = {
+            source: dict(paths)
+            for source, paths in nx.all_pairs_shortest_path(component_view, cutoff=n_edges)
+        }
+        all_lengths = {
+            source: dict(lengths)
+            for source, lengths in nx.all_pairs_shortest_path_length(component_view)
+        }
+
+        def average_distance(node):
+            distances = all_lengths.get(node, {})
+            if len(distances) <= 1:
+                return 0.0
+            return sum(distance for target, distance in distances.items() if target != node) / (len(distances) - 1)
+
+        centroid = min(node_order, key=lambda node: (average_distance(node), node_order.index(node)))
+        centroid_distances = all_lengths.get(centroid, {})
+
+        uncovered_edges = {
+            (u, v)
+            for u, v in subgraph.edges()
+            if u in component_nodes and v in component_nodes
+        }
+        candidates = []
+        for source_index, source in enumerate(node_order):
+            source_paths = all_paths.get(source, {})
+            for target_index in range(source_index + 1, len(node_order)):
+                target = node_order[target_index]
+                path_nodes = source_paths.get(target)
+                if path_nodes is None:
+                    continue
+                path_length = len(path_nodes) - 1
+                if path_length < 1 or path_length > n_edges:
+                    continue
+                centroid_distance = min(
+                    centroid_distances.get(node, float("inf"))
+                    for node in path_nodes
+                )
+                candidates.append(
+                    (
+                        tuple(path_nodes),
+                        int(path_length),
+                        float(centroid_distance),
+                        source_index,
+                        target_index,
+                    )
+                )
+
+        while uncovered_edges:
+            best = None
+            for path_nodes, path_length, centroid_distance, source_index, target_index in candidates:
+                path_edges, covered_edges = _path_edge_candidates_from_nodes(
+                    subgraph,
+                    list(path_nodes),
+                    uncovered_edges,
+                )
+                if not covered_edges:
+                    continue
+                score = (
+                    len(covered_edges),
+                    -centroid_distance,
+                    -path_length,
+                    -source_index,
+                    -target_index,
+                )
+                if best is None or score > best[0]:
+                    best = (score, path_edges, covered_edges)
+
+            if best is None:
+                edge = next(iter(uncovered_edges))
+                components.append([edge])
+                uncovered_edges.remove(edge)
+                continue
+
+            _, path_edges, covered_edges = best
+            components.append(path_edges)
+            uncovered_edges.difference_update(covered_edges)
+
+    return components
+
+
 @curry
 def path(
     abstract_graph: 'AbstractGraph',
@@ -2354,6 +2491,29 @@ def path(
         ),
         source_operator=path,
         params={"number_of_edges": number_of_edges},
+    )
+
+
+@curry
+def shortest_path_cover(
+    abstract_graph: 'AbstractGraph',
+    n_edges=3,
+    ) -> 'AbstractGraph':
+    """Emit bounded shortest-path edge subgraphs that cover every input edge.
+
+    For each mapped subgraph, this operator greedily selects weak shortest paths
+    of at most ``n_edges`` edges until every original edge has appeared in at
+    least one emitted path. Directed graphs use weak traversal for selection and
+    preserve original directed edge orientation in the mapped subgraphs.
+    """
+    return apply_local_edge_decomposition(
+        abstract_graph,
+        lambda subgraph: shortest_path_cover_decomposition_function(
+            subgraph,
+            n_edges=n_edges,
+        ),
+        source_operator=shortest_path_cover,
+        params={"n_edges": n_edges},
     )
 
 #--------------------------------------------------------------------------------
@@ -5690,6 +5850,7 @@ _AG_OPERATORS = [
     cycle,
     tree,
     path,
+    shortest_path_cover,
     spine,
     graphlet,
     clique,
@@ -5769,6 +5930,7 @@ _DIRECTED_SUPPORT_BY_OPERATOR = {
     connected_component: DIRECTED_SUPPORT_WEAK,
     split: DIRECTED_SUPPORT_WEAK,
     tree: DIRECTED_SUPPORT_WEAK,
+    shortest_path_cover: DIRECTED_SUPPORT_WEAK,
     spine: DIRECTED_SUPPORT_WEAK,
     graphlet: DIRECTED_SUPPORT_WEAK,
     local_complement: DIRECTED_SUPPORT_WEAK,
