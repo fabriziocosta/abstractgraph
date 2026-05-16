@@ -710,6 +710,36 @@ def test_shortest_path_cover_metadata_registry_xml_and_validation() -> None:
         ops.shortest_path_cover(n_edges=0)(ag)
 
 
+def test_low_cut_partition_final_components_preserve_requested_overlap() -> None:
+    graph = nx.Graph()
+    graph.add_nodes_from(range(14))
+    graph.add_edges_from([
+        (0, 1), (1, 2), (2, 0),
+        (2, 3), (3, 4), (4, 5),
+        (5, 6), (6, 7), (7, 5),
+        (6, 8), (8, 9), (9, 10),
+        (10, 11), (11, 12), (12, 10),
+        (9, 13),
+    ])
+
+    components = ops.low_cut_partition_decomposition_function(
+        graph,
+        max_part_size=5,
+        min_part_size=2,
+        target_max_boundary_nodes=2,
+        target_max_cut_edges=2,
+        min_overlap_nodes=1,
+        seed=7,
+    )
+
+    assert components
+    assert set().union(*(set(component) for component in components)) == set(graph.nodes())
+    for component in components:
+        part = set(component)
+        assert nx.is_connected(graph.subgraph(part))
+        assert any(part & set(other) for other in components if other is not component)
+
+
 def test_scaffold_refactored_global_combination_regression() -> None:
     graph = nx.path_graph(3)
     ag = AbstractGraph(graph=graph)

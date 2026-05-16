@@ -3472,6 +3472,49 @@ def _edge_cover_components(subgraph: nx.Graph):
     return comps
 
 
+def _ensure_final_component_overlap(
+    subgraph: nx.Graph,
+    components: List[List[Any]],
+    *,
+    min_overlap_nodes: int = 1,
+) -> List[List[Any]]:
+    """Duplicate boundary nodes so final neighboring components overlap."""
+    need = max(0, int(min_overlap_nodes))
+    if need == 0 or len(components) < 2:
+        return components
+
+    parts = [set(component) for component in components]
+
+    for idx, part in enumerate(parts):
+        if not part:
+            continue
+        overlap = set().union(*(part & other for other_idx, other in enumerate(parts) if other_idx != idx))
+        if len(overlap) >= need:
+            continue
+
+        candidates = []
+        for node in part:
+            for neighbor in _iter_adjacent_nodes(subgraph, node):
+                if neighbor in part:
+                    continue
+                for other_idx, other in enumerate(parts):
+                    if other_idx == idx or neighbor not in other:
+                        continue
+                    candidates.append((other_idx, node, neighbor))
+                    break
+        candidates.sort(key=lambda item: (item[0], str(item[1]), str(item[2])))
+
+        for _, _, neighbor in candidates:
+            if len(overlap) >= need:
+                break
+            if neighbor in overlap:
+                continue
+            part.add(neighbor)
+            overlap.add(neighbor)
+
+    return [list(part) for part in parts]
+
+
 def _count_attachment_edges(subgraph: nx.Graph, part_nodes: set) -> int:
     """
     Count edges from a node set to the rest of the subgraph.
@@ -3726,6 +3769,11 @@ def low_cut_partition_decomposition_function(
         local = subgraph.subgraph(nodes)
         for cc in _connected_components_view(local):
             final_components.append(list(cc))
+    final_components = _ensure_final_component_overlap(
+        subgraph,
+        final_components,
+        min_overlap_nodes=min_overlap,
+    )
 
     if not bool(strict_max_boundary):
         return final_components
