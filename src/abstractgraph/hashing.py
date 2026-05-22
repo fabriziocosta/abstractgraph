@@ -554,7 +554,60 @@ def canonical_dfs_graph_signature(graph: nx.Graph, node_hash_dict: Dict[Any, int
     return tuple(sorted(rooted_signatures))
 
 
-def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
+def _validate_graph_hash_nbits(nbits: int) -> None:
+    if not isinstance(nbits, int) or nbits <= 0:
+        raise ValueError("nbits must be a positive integer")
+
+
+def hash_graph_fast(graph: nx.Graph, nbits: int = 19) -> int:
+    """
+    Compute a fast, deterministic, relabeling-invariant graph hash.
+
+    This intentionally avoids the rooted all-node hashes and canonical DFS
+    certificate used by the canonical hash. It is cheaper and coarser: collisions
+    between non-isomorphic graphs are more likely, but directedness, node labels,
+    edge labels, edge orientation, and one-hop node signatures are preserved.
+    """
+    _validate_graph_hash_nbits(nbits)
+    directed_tag = "directed" if nx.is_directed(graph) else "undirected"
+
+    node_signatures = []
+    for node in graph.nodes():
+        node_signatures.append(
+            (
+                graph.nodes[node].get("label", ""),
+                tuple(sorted(_iter_incident_edge_payloads(graph, node))),
+            )
+        )
+
+    edge_signatures = []
+    for u, v in graph.edges():
+        edge_label = graph.edges[u, v].get("label", "")
+        if nx.is_directed(graph):
+            edge_signatures.append(
+                (
+                    "directed_edge",
+                    graph.nodes[u].get("label", ""),
+                    graph.nodes[v].get("label", ""),
+                    edge_label,
+                )
+            )
+        else:
+            endpoint_labels = tuple(sorted([graph.nodes[u].get("label", ""), graph.nodes[v].get("label", "")]))
+            edge_signatures.append(("undirected_edge", endpoint_labels, edge_label))
+
+    payload = (
+        "graph_hash_fast",
+        directed_tag,
+        graph.number_of_nodes(),
+        graph.number_of_edges(),
+        hash_set(node_signatures),
+        hash_set(edge_signatures),
+    )
+    return hash_bounded(payload, nbits=nbits)
+
+
+def hash_graph_canonical(graph: nx.Graph, nbits: int = 19) -> int:
     """
     Computes a hash for the entire graph by hashing all rooted subgraphs.
 
@@ -568,9 +621,7 @@ def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
     Raises:
         ValueError: If `nbits` is not a positive integer.
     """
-    # Validate that nbits is a positive integer
-    if not isinstance(nbits, int) or nbits <= 0:
-        raise ValueError("nbits must be a positive integer")
+    _validate_graph_hash_nbits(nbits)
 
     # Create a dictionary mapping each node to its computed hash
     node_hashes: Dict[int, int] = {node: hash_node(node, graph) for node in graph.nodes()}
@@ -612,6 +663,23 @@ def hash_graph(graph: nx.Graph, nbits: int = 19) -> int:
     # Hash the set of all edge hashes to obtain the final graph hash, bounded by nbits
     final_graph_hash = hash_bounded(hash_set(hashes_list), nbits=nbits)
     return final_graph_hash
+
+
+def hash_graph(graph: nx.Graph, nbits: int = 19, hash_mode: str = "fast") -> int:
+    """
+    Compute a bounded graph hash.
+
+    Args:
+        graph: Graph to hash.
+        nbits: Number of bits to limit the final hash.
+        hash_mode: ``"fast"`` for a coarse non-DFS hash, or ``"canonical"`` for
+            the slower rooted-hash plus canonical DFS certificate hash.
+    """
+    if hash_mode == "fast":
+        return hash_graph_fast(graph, nbits=nbits)
+    if hash_mode == "canonical":
+        return hash_graph_canonical(graph, nbits=nbits)
+    raise ValueError(f"Unknown hash_mode: {hash_mode!r}. Expected 'fast' or 'canonical'.")
 
 
 def _parallel_map(func, items, processes):

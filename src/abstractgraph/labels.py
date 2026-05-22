@@ -15,12 +15,14 @@ def _get_mapped_subgraph(node_attrs: dict) -> Optional[nx.Graph]:
 #==========================================================================================
 # Label functions for AbstractGraph
 #==========================================================================================
-def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
+def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS, hash_mode: str = "fast") -> Callable[[dict], int]:
     """
     Build a label function that hashes the mapped base subgraph.
 
     Args:
         nbits: The number of bits for the hash output (default: 14).
+        hash_mode: Graph hash strategy. Use ``"fast"`` by default or
+            ``"canonical"`` for the slower DFS-certificate hash.
 
     Returns:
         Callable[[dict], int]: Label function mapping node attrs to an integer hash.
@@ -29,17 +31,20 @@ def graph_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[d
         subgraph = _get_mapped_subgraph(node_attrs)
         if subgraph is None:
             raise ValueError("Node attributes must contain a 'mapped_subgraph' key.")
-        return hash_graph(subgraph, nbits=nbits)
+        return hash_graph(subgraph, nbits=nbits, hash_mode=hash_mode)
     label_fn.nbits = nbits # Attach nbits as an attribute
     label_fn.label_mode = "graph_hash"
+    label_fn.hash_mode = hash_mode
     return label_fn
 
-def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:
+def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS, hash_mode: str = "fast") -> Callable[[dict], int]:
     """
     Build a label function that hashes only mapped-subgraph structure.
 
     Args:
         nbits: The number of bits for the hash output (default: 14).
+        hash_mode: Graph hash strategy. Use ``"fast"`` by default or
+            ``"canonical"`` for the slower DFS-certificate hash.
 
     Returns:
         Callable[[dict], int]: Label function using structure-only hashing.
@@ -56,9 +61,10 @@ def graph_structure_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> C
         for u, v in structure_graph.edges:
             structure_graph.edges[u, v]["label"] = "-"
 
-        return hash_graph(structure_graph, nbits=nbits)
+        return hash_graph(structure_graph, nbits=nbits, hash_mode=hash_mode)
     label_fn.nbits = nbits # Attach nbits as an attribute
     label_fn.label_mode = "graph_structure_hash"
+    label_fn.hash_mode = hash_mode
     return label_fn
 
 def node_histogram_hash_label_function_factory(nbits: int = DEFAULT_NBITS) -> Callable[[dict], int]:

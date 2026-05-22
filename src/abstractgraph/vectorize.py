@@ -9,7 +9,13 @@ from scipy.sparse import lil_matrix, csr_matrix
 from abstractgraph.graphs import AbstractGraph
 from abstractgraph.labels import graph_hash_label_function_factory
 
-def vectorize(abstract_graph: "AbstractGraph", nbits: int = 10, return_dense: bool = True) -> Union[np.ndarray, csr_matrix]:
+def vectorize(
+    abstract_graph: "AbstractGraph",
+    nbits: int = 10,
+    return_dense: bool = True,
+    label_function: Optional[Callable[[dict], int]] = None,
+    hash_mode: str = "fast",
+) -> Union[np.ndarray, csr_matrix]:
     """
     Vectorize an AbstractGraph into node-level feature rows.
 
@@ -21,6 +27,10 @@ def vectorize(abstract_graph: "AbstractGraph", nbits: int = 10, return_dense: bo
         abstract_graph: AbstractGraph instance to vectorize.
         nbits: Hash bit width; number of features is 2**nbits.
         return_dense: If True returns a dense array, else a CSR matrix.
+        label_function: Optional interpretation-node label function. If omitted,
+            a graph-hash label function is created from ``nbits`` and
+            ``hash_mode``.
+        hash_mode: Graph hash strategy used when ``label_function`` is omitted.
 
     Returns:
         Union[np.ndarray, csr_matrix]: Feature matrix with bias and degree columns.
@@ -33,7 +43,7 @@ def vectorize(abstract_graph: "AbstractGraph", nbits: int = 10, return_dense: bo
 
     # 1. Set the label function with the correct nbits attribute.
     #    This is crucial for to_array to infer the correct matrix dimensions.
-    abstract_graph.label_function = graph_hash_label_function_factory(nbits=nbits)
+    abstract_graph.label_function = label_function or graph_hash_label_function_factory(nbits=nbits, hash_mode=hash_mode)
 
     # 2. Call to_array to get the base count matrix (always returns csr_matrix).
     #    to_array internally calls apply_label_function.
@@ -80,7 +90,9 @@ class AbstractGraphTransformer:
                  decomposition_function: Callable[[AbstractGraph], AbstractGraph],
                  return_dense: bool = True, 
                  n_jobs: int = -1,
-                 backend: Optional[str] = None) -> None:
+                 backend: Optional[str] = None,
+                 hash_mode: str = "fast",
+                 label_function: Optional[Callable[[dict], int]] = None) -> None:
         """
         Initialize the transformer.
 
@@ -90,6 +102,10 @@ class AbstractGraphTransformer:
             return_dense: Whether to return dense arrays.
             n_jobs: Joblib parallelism setting.
             backend: Optional joblib backend (e.g., "threading").
+            hash_mode: Graph hash strategy used when ``label_function`` is not
+                provided. ``"fast"`` is the default; use ``"canonical"`` for the
+                slower DFS-certificate hash.
+            label_function: Optional interpretation-node label function.
 
         Returns:
             None.
@@ -99,6 +115,8 @@ class AbstractGraphTransformer:
         self.return_dense = return_dense
         self.n_jobs = n_jobs
         self.backend = backend
+        self.hash_mode = hash_mode
+        self.label_function = label_function
 
     def fit(self, X: List[Any], y: Optional[Any] = None) -> "AbstractGraphTransformer":
         """
@@ -139,12 +157,22 @@ class AbstractGraphTransformer:
         """
         # Create the AbstractGraph from the input graph using the provided graph.
         # The following call creates an AbstractGraph and populates its interpretation graph.
-        ag = AbstractGraph(graph=graph)
+        label_function = self.label_function or graph_hash_label_function_factory(
+            nbits=self.nbits,
+            hash_mode=self.hash_mode,
+        )
+        ag = AbstractGraph(graph=graph, label_function=label_function)
         ag.create_default_interpretation_node()
         # Apply the provided decomposition function.
         ag = self.decomposition_function(ag)
         # Vectorize the abstract graph.
-        arr = vectorize(ag, nbits=self.nbits, return_dense=self.return_dense)
+        arr = vectorize(
+            ag,
+            nbits=self.nbits,
+            return_dense=self.return_dense,
+            label_function=label_function,
+            hash_mode=self.hash_mode,
+        )
         # Sum over rows to get a single feature vector per graph.
         arr = arr.sum(axis=0)
         if not self.return_dense:             # i.e. we promised a sparse output

@@ -13,7 +13,7 @@ from abstractgraph.graphs import (
     is_simple_graph,
 )
 from abstractgraph.hashing import hash_graph
-from abstractgraph.vectorize import vectorize
+from abstractgraph.vectorize import AbstractGraphTransformer, vectorize
 from abstractgraph.xml import operator_from_xml_string, operator_to_xml_string
 
 
@@ -237,6 +237,40 @@ def test_hash_graph_distinguishes_edge_orientation() -> None:
     assert hash_graph(directed_forward, nbits=18) != hash_graph(directed_reverse, nbits=18)
 
 
+def test_hash_graph_fast_is_deterministic_and_relabeling_invariant() -> None:
+    graph = nx.DiGraph()
+    graph.add_node("a", label="mov")
+    graph.add_node("b", label="jmp")
+    graph.add_node("c", label="ret")
+    graph.add_edge("a", "b", label="next")
+    graph.add_edge("b", "c", label="jump")
+
+    relabeled = nx.relabel_nodes(graph, {"a": 10, "b": 20, "c": 30})
+
+    assert hash_graph(graph, nbits=18) == hash_graph(graph, nbits=18)
+    assert hash_graph(graph, nbits=18) == hash_graph(relabeled, nbits=18)
+
+
+def test_hash_graph_fast_distinguishes_basic_directional_structure() -> None:
+    undirected = nx.Graph()
+    undirected.add_node(0, label="a")
+    undirected.add_node(1, label="b")
+    undirected.add_edge(0, 1, label="x")
+
+    directed_forward = nx.DiGraph()
+    directed_forward.add_node(0, label="a")
+    directed_forward.add_node(1, label="b")
+    directed_forward.add_edge(0, 1, label="x")
+
+    directed_reverse = nx.DiGraph()
+    directed_reverse.add_node(0, label="a")
+    directed_reverse.add_node(1, label="b")
+    directed_reverse.add_edge(1, 0, label="x")
+
+    assert hash_graph(undirected, nbits=18, hash_mode="fast") != hash_graph(directed_forward, nbits=18, hash_mode="fast")
+    assert hash_graph(directed_forward, nbits=18, hash_mode="fast") != hash_graph(directed_reverse, nbits=18, hash_mode="fast")
+
+
 def test_hash_graph_distinguishes_same_label_same_degree_cross_edge_structure() -> None:
     labels = {node: "A" for node in range(1, 7)}
     graph_a_edges = [
@@ -267,10 +301,31 @@ def test_hash_graph_distinguishes_same_label_same_degree_cross_edge_structure() 
         graph.add_edges_from((u, v, {"label": ""}) for u, v in edges)
 
     assert sorted(dict(graph_a.degree()).values()) == sorted(dict(graph_b.degree()).values())
-    assert hash_graph(graph_a, nbits=31) != hash_graph(graph_b, nbits=31)
+    assert hash_graph(graph_a, nbits=31, hash_mode="canonical") != hash_graph(graph_b, nbits=31, hash_mode="canonical")
 
     relabeled = nx.relabel_nodes(graph_a, {node: f"node-{node}" for node in graph_a.nodes()})
-    assert hash_graph(graph_a, nbits=31) == hash_graph(relabeled, nbits=31)
+    assert hash_graph(graph_a, nbits=31, hash_mode="canonical") == hash_graph(relabeled, nbits=31, hash_mode="canonical")
+
+
+def test_abstract_graph_transformer_accepts_hash_modes() -> None:
+    graph = _make_graph()
+    transformer_fast = AbstractGraphTransformer(
+        nbits=6,
+        decomposition_function=ops.node(),
+        return_dense=False,
+        n_jobs=1,
+        hash_mode="fast",
+    )
+    transformer_canonical = AbstractGraphTransformer(
+        nbits=6,
+        decomposition_function=ops.node(),
+        return_dense=False,
+        n_jobs=1,
+        hash_mode="canonical",
+    )
+
+    assert transformer_fast.transform([graph]).shape == (1, 2**6)
+    assert transformer_canonical.transform([graph]).shape == (1, 2**6)
 
 
 def test_directed_graph_to_abstract_graph_uses_weak_connectivity() -> None:

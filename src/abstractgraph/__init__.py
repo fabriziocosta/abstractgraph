@@ -20,7 +20,15 @@ from abstractgraph.graphs import (
     make_simple_graph_like,
     set_mapped_subgraph,
 )
-from abstractgraph.hashing import hash_bounded, hash_graph, hash_sequence, hash_set, hash_value
+from abstractgraph.hashing import (
+    hash_bounded,
+    hash_graph,
+    hash_graph_canonical,
+    hash_graph_fast,
+    hash_sequence,
+    hash_set,
+    hash_value,
+)
 from abstractgraph.labels import (
     DEFAULT_NBITS,
     graph_hash_label_function_factory,
@@ -49,6 +57,8 @@ __all__ = [
     "make_simple_graph_like",
     "set_mapped_subgraph",
     "hash_graph",
+    "hash_graph_fast",
+    "hash_graph_canonical",
     "hash_bounded",
     "hash_sequence",
     "hash_set",
