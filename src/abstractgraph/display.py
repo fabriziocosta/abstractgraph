@@ -1740,7 +1740,7 @@ def display_decomposition_graph(comp_func_or_graph, output_file: str = "decompos
         )
 
         A.layout(prog="dot")
-        A.draw(output_file)
+        A.draw(output_file, prog="dot")
 
         if os.path.exists(output_file):
             img = mpimg.imread(output_file)

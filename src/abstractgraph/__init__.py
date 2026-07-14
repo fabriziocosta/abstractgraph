@@ -8,7 +8,14 @@ from abstractgraph.display import (
     display_grouped_graphs,
     display_mappings,
 )
-from abstractgraph.artificial import ArtificialGraphDatasetConstructor, RandomGraphConstructor
+from abstractgraph.artificial import (
+    ArtificialGraphDatasetConstructor,
+    RandomGraphConstructor,
+    artificial_node_label_colors,
+    generate_artificial_dataset,
+    generate_cycle_path_star_graph,
+    make_artificial_graph_plotter,
+)
 from abstractgraph.graphs import (
     AbstractGraph,
     get_interpretation_label_to_mapped_subgraphs,
@@ -84,6 +91,10 @@ __all__ = [
     "display_decomposition_graph",
     "RandomGraphConstructor",
     "ArtificialGraphDatasetConstructor",
+    "artificial_node_label_colors",
+    "generate_artificial_dataset",
+    "generate_cycle_path_star_graph",
+    "make_artificial_graph_plotter",
     "apply_local_node_decomposition",
     "apply_global_node_decomposition",
     "apply_local_edge_decomposition",
