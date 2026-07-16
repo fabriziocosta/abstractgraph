@@ -10,8 +10,8 @@ from toolz.functoolz import curry
 from networkx.drawing.nx_agraph import to_agraph
 import networkx as nx
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import matplotlib.transforms as mtransforms
+from matplotlib import colormaps
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
@@ -349,7 +349,7 @@ def get_color(label: Any, cmap_name: str = 'hsv') -> Any:
     Returns:
         Any: Color (RGBA tuple) as returned by the colormap.
     """
-    cmap = cm.get_cmap(cmap_name)
+    cmap = colormaps.get_cmap(cmap_name)
     # Always hash the label (even if it's an int) to spread values across [0,1)
     # This avoids tiny normalized values (e.g., 9708/2^32) that cluster near hue 0 (red) in 'hsv'.
     num = stable_hash(str(label))
