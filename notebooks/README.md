@@ -8,35 +8,35 @@ Layout:
 - `research/` for exploratory core-only notebooks
 
 Recommended sequence:
-- `examples/example_graph_hashing_directed_vs_undirected.ipynb`
+- `examples/graph_hashing_directed_vs_undirected.ipynb`
   Small labeled graphs showing how graph hashes differ for undirected and
   directed edge semantics.
-- `examples/example_abstract_graph_operators_01_unary_decompositions.ipynb`
+- `examples/01_unary_decompositions.ipynb`
   Step 1: unary decomposition operators and visual intuition.
-- `examples/example_abstract_graph_operators_02_composition_and_add.ipynb`
+- `examples/02_composition_and_add.ipynb`
   Step 2: `compose`, `forward_compose`, and additive unions.
-- `examples/example_abstract_graph_operators_03_merge_and_complements.ipynb`
+- `examples/03_merge_and_complements.ipynb`
   Step 3: `merge`, `complement`, and `edge_complement` for aggregate and outside-context views.
-- `examples/example_abstract_graph_operators_04_filters_and_selection.ipynb`
+- `examples/04_filters_and_selection.ipynb`
   Step 4: structural filters, label filters, and deterministic subsampling.
-- `examples/example_abstract_graph_operators_05_binary_and_combination_operators.ipynb`
+- `examples/05_binary_and_combination_operators.ipynb`
   Step 5: combinations, intersections, binary operators, and shortest-path unions.
-- `examples/example_abstract_graph_operators_06_control_flow_and_conditionals.ipynb`
+- `examples/06_control_flow_and_conditionals.ipynb`
   Step 6: use branching and loop operators to build conditional graph programs.
-- `examples/example_abstract_graph_operators_07_xml_and_operator_serialization.ipynb`
+- `examples/07_xml_and_operator_serialization.ipynb`
   Step 7: XML registration, serialization, deserialization, and round-trips.
-- `examples/example_abstract_graph_operators_08_vectorization_and_features.ipynb`
+- `examples/08_vectorization_and_features.ipynb`
   Step 8: node-level vectorization, graph-level aggregation, and batch transformers.
-- `examples/example_abstract_graph_operators_09_preprocessor_attention_pipeline.ipynb`
+- `examples/09_preprocessor_attention_pipeline.ipynb`
   Step 9: attention-derived base-graph construction through
   `abstractgraph-graphicalizer` and handoff into operators.
-- `examples/example_abstract_graph_operators_10_feature_inspection_and_subgraphs.ipynb`
+- `examples/10_feature_inspection_and_subgraphs.ipynb`
   Step 10: inspect hashed feature labels by mapping them back to representative subgraphs.
 
 Reference notebook:
-- `examples/example_abstract_graph_operators_overview.ipynb`
+- `examples/overview.ipynb`
   Broad operator sampler covering unary, compositional, filtering, XML, and meta operators.
-- `examples/example_custom_operator_scaffold.ipynb`
+- `examples/custom_operator_scaffold.ipynb`
   How to write custom node-induced and edge-induced operators with the public scaffold helpers.
 
 Bootstrap behavior:

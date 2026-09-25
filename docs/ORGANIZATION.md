@@ -84,29 +84,29 @@ environment if those visualizations are needed.
 
 Recommended sequence:
 
-1. `notebooks/examples/example_abstract_graph_operators_01_unary_decompositions.ipynb`
+1. `notebooks/examples/01_unary_decompositions.ipynb`
    Start with the core unary decomposition vocabulary.
-2. `notebooks/examples/example_abstract_graph_operators_02_composition_and_add.ipynb`
+2. `notebooks/examples/02_composition_and_add.ipynb`
    Learn composition order and additive unions.
-3. `notebooks/examples/example_abstract_graph_operators_03_filters_and_selection.ipynb`
+3. `notebooks/examples/03_filters_and_selection.ipynb`
    Constrain decompositions with structural and label-based filters.
-4. `notebooks/examples/example_abstract_graph_operators_04_binary_and_combination_operators.ipynb`
+4. `notebooks/examples/04_binary_and_combination_operators.ipynb`
    Build new subgraphs from combinations and overlaps.
-5. `notebooks/examples/example_abstract_graph_operators_05_control_flow_and_conditionals.ipynb`
+5. `notebooks/examples/05_control_flow_and_conditionals.ipynb`
    Learn how control-flow operators turn pipelines into graph programs.
-6. `notebooks/examples/example_abstract_graph_operators_06_xml_and_operator_serialization.ipynb`
+6. `notebooks/examples/06_xml_and_operator_serialization.ipynb`
    Serialize and round-trip operator pipelines.
-7. `notebooks/examples/example_abstract_graph_operators_07_vectorization_and_features.ipynb`
+7. `notebooks/examples/07_vectorization_and_features.ipynb`
    Convert abstract graphs into ML-ready feature matrices.
-8. `notebooks/examples/example_abstract_graph_operators_08_preprocessor_attention_pipeline.ipynb`
+8. `notebooks/examples/08_preprocessor_attention_pipeline.ipynb`
    See how graphicalizer attention backends feed base graphs into the same
    pipeline.
-9. `notebooks/examples/example_abstract_graph_operators_09_feature_inspection_and_subgraphs.ipynb`
+9. `notebooks/examples/09_feature_inspection_and_subgraphs.ipynb`
    Inspect which hashed feature labels correspond to recurring subgraphs.
 
 Reference notebook:
 
-- `notebooks/examples/example_abstract_graph_operators_overview.ipynb`
+- `notebooks/examples/overview.ipynb`
   Broad operator sampler kept as a compact survey after the staged sequence.
 
 ## Local Validation
