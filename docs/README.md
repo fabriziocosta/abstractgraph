@@ -11,8 +11,8 @@ split repositories:
 
 - `abstractgraph`: core graph abstraction and utilities
 - `abstractgraph-ml`: estimators and analysis built on top of the core
-- `abstractgraph-generative`: rewrite, autoregressive, interpolation, and story
-tooling built on top of the core and ML layers
+- `abstractgraph-generative`: rewrite, autoregressive, interpolation, and graph
+  generation tooling built on top of the core and ML layers
 
 The core package is responsible for:
 - representing abstract graphs

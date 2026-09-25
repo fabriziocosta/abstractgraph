@@ -37,11 +37,11 @@ This is the key design choice.
 
 The relevant implementation lives in:
 
-- [vectorize.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/vectorize.py)
-- [graphs.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/graphs.py)
-- [labels.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/labels.py)
-- [hashing.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/hashing.py)
-- [feature_subgraphs.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/feature_subgraphs.py)
+- [vectorize.py](../src/abstractgraph/vectorize.py)
+- [graphs.py](../src/abstractgraph/graphs.py)
+- [labels.py](../src/abstractgraph/labels.py)
+- [hashing.py](../src/abstractgraph/hashing.py)
+- [feature_subgraphs.py](../src/abstractgraph/feature_subgraphs.py)
 
 An `AbstractGraph` stores:
 
@@ -80,7 +80,7 @@ This means the structural hashed features start at column `2`.
 ## What `to_array()` Actually Computes
 
 The core counting logic is in
-[graphs.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/graphs.py).
+[graphs.py](../src/abstractgraph/graphs.py).
 
 `AbstractGraph.to_array()` builds a sparse matrix with:
 
@@ -108,7 +108,7 @@ to each base node.
 ## What `vectorize()` Adds
 
 The public `vectorize(...)` function in
-[vectorize.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/vectorize.py)
+[vectorize.py](../src/abstractgraph/vectorize.py)
 starts from `to_array()` and then overwrites the first two columns:
 
 - column `0` becomes all ones
@@ -137,7 +137,7 @@ This is the main node-level representation used by the library.
 ## Node-Level vs Graph-Level Vectorization
 
 There are two public transformer classes in
-[vectorize.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/vectorize.py).
+[vectorize.py](../src/abstractgraph/vectorize.py).
 
 `AbstractGraphNodeTransformer`
 
@@ -188,7 +188,7 @@ especially when `nbits` is small.
 
 The codebase does not stop at hashing.
 
-[feature_subgraphs.py](/home/fabrizio/sync/Projects/AbstractGraphEcosystem/abstractgraph/src/abstractgraph/feature_subgraphs.py)
+[feature_subgraphs.py](../src/abstractgraph/feature_subgraphs.py)
 groups representative mapped subgraphs by interpretation-node label across a set of
 graphs.
 
