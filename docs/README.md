@@ -20,7 +20,6 @@ The core package is responsible for:
 - serializing operator pipelines
 - visualizing graph structures and decompositions
 - hashing and vectorizing subgraph structure
-- adapting non-graph inputs into base NetworkX graphs
 
 ## Local organization
 
@@ -53,8 +52,6 @@ workflow, see the superproject organization guide at
   feature-to-subgraph inspection helpers
 - `abstractgraph.utils`
   plotting and utility helpers shared by examples
-- `abstractgraph.to_graph`
-  graph-construction adapters such as NLP dependency parsing
 
 ## Key concepts
 

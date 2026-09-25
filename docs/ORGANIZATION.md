@@ -21,8 +21,6 @@ For the semantic role of this repository, see [../README.md](../README.md).
   Visualization for graphs, mappings, and operator pipelines.
 - `src/abstractgraph/vectorize.py`
   Graph- and node-level vectorizers.
-- `src/abstractgraph/to_graph/`
-  Adapters that build base graphs from external data.
 
 ## Documentation
 
