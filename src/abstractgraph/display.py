@@ -109,6 +109,8 @@ def _packed_kamada_kawai_layout(
     graph: nx.Graph,
     *,
     padding: float = 1.0,
+    undirected_layout: bool = True,
+    edge_label_attr: str = 'label',
 ) -> Dict[Any, Tuple[float, float]]:
     """
     Compute a Kamada-Kawai layout with non-overlapping disconnected components.
@@ -116,21 +118,33 @@ def _packed_kamada_kawai_layout(
     Args:
         graph: Graph to lay out.
         padding: Extra spacing inserted between packed components.
+        undirected_layout: If True, use undirected path distances for layout.
+        edge_label_attr: Edge attribute whose text length informs target spacing.
 
     Returns:
         Dict mapping node ids to (x, y) positions.
     """
     if graph.number_of_nodes() == 0:
         return {}
-    undirected = graph.to_undirected()
-    components = [list(c) for c in nx.connected_components(undirected)]
+
+    layout_graph = graph.to_undirected() if undirected_layout and graph.is_directed() else graph.copy()
+    for _source, _target, data in layout_graph.edges(data=True):
+        label = data.get(edge_label_attr)
+        try:
+            edge_weight = float(data.get('weight', 1.0))
+        except (TypeError, ValueError):
+            edge_weight = 1.0
+        label_weight = len(str(label)) / 8.0 if label is not None else 0.0
+        data['_display_layout_weight'] = max(edge_weight, label_weight, 0.1)
+
+    components = [list(c) for c in nx.connected_components(layout_graph.to_undirected())]
     if len(components) <= 1:
-        return nx.kamada_kawai_layout(graph)
+        return nx.kamada_kawai_layout(layout_graph, weight='_display_layout_weight')
 
     component_positions = []
     for comp_nodes in components:
-        sub = graph.subgraph(comp_nodes)
-        pos = nx.kamada_kawai_layout(sub)
+        sub = layout_graph.subgraph(comp_nodes)
+        pos = nx.kamada_kawai_layout(sub, weight='_display_layout_weight')
         xs = [p[0] for p in pos.values()]
         ys = [p[1] for p in pos.values()]
         min_x, max_x = min(xs), max(xs)
@@ -374,6 +388,7 @@ def display_graph(
     edge_labels: bool = False,
     edge_label_attr: str = 'label',
     edge_label_font_size: int = 6,
+    undirected_layout: bool = True,
     fit_viewport: bool = True,
 ) -> Optional[plt.Axes]:
     """
@@ -400,6 +415,8 @@ def display_graph(
         edge_labels: If True, draw edge labels.
         edge_label_attr: Edge attribute name to use for labels (edges missing it are skipped).
         edge_label_font_size: Font size for edge labels.
+        undirected_layout: If True, use undirected Kamada-Kawai distances for positioning
+            while preserving the graph's original edge direction in the drawing.
         fit_viewport: If True, set axis limits to fit this graph with padding.
 
     Returns:
@@ -436,9 +453,15 @@ def display_graph(
     if pos is None:
         if graph.number_of_nodes() > 0:
             if pack_disconnected:
-                pos = _packed_kamada_kawai_layout(graph, padding=pack_padding)
+                pos = _packed_kamada_kawai_layout(
+                    graph,
+                    padding=pack_padding,
+                    undirected_layout=undirected_layout,
+                    edge_label_attr=edge_label_attr,
+                )
             else:
-                pos = nx.kamada_kawai_layout(graph)
+                layout_graph = graph.to_undirected() if undirected_layout and graph.is_directed() else graph
+                pos = nx.kamada_kawai_layout(layout_graph)
         else:
             pos = {} # Empty position dict for empty graph
 
@@ -572,9 +595,13 @@ def display(
     size: Tuple[int, int] = (5, 4),
     ax: Optional[plt.Axes] = None, # Use plt.Axes for type hint
     show_legend: bool = False,
+    node_labels: bool = False,
+    node_label_attr: str = 'label',
+    node_label_font_size: int = 6,
     edge_labels: Optional[bool] = None,
     edge_label_attr: str = 'label',
     edge_label_font_size: int = 6,
+    undirected_layout: bool = True,
 ) -> Optional[Union[plt.Axes, Figure]]:
     """
     Visualizes the full nested structure of a AbstractGraph using display_graph.
@@ -594,10 +621,14 @@ def display(
         size: The figure size as a tuple (width, height) if `ax` is None.
         ax: A Matplotlib axis to draw on. If None, a new figure and axis are created.
         show_legend: If True, displays a legend.
+        node_labels: If True, draw labels for base and interpretation nodes.
+        node_label_attr: Node attribute to display when ``node_labels`` is True.
+        node_label_font_size: Font size for node labels.
         edge_labels: If True, draw edge labels on the base and interpretation graphs.
             If None, use the AbstractGraph display preference.
         edge_label_attr: Edge attribute name to use for labels.
         edge_label_font_size: Font size for edge labels.
+        undirected_layout: Use undirected distances for layout while retaining directed edges.
 
     Returns:
         The Matplotlib axis containing the visualization (or a Figure if multiple graphs are provided).
@@ -612,9 +643,13 @@ def display(
                 size=size,
                 show=False,
                 show_legend=show_legend,
+                node_labels=node_labels,
+                node_label_attr=node_label_attr,
+                node_label_font_size=node_label_font_size,
                 edge_labels=edge_labels,
                 edge_label_attr=edge_label_attr,
                 edge_label_font_size=edge_label_font_size,
+                undirected_layout=undirected_layout,
             )
         raise TypeError("display expects an AbstractGraph or a list of graphs.")
     if edge_labels is None:
@@ -648,13 +683,21 @@ def display(
     # --- Calculate Layouts ---
     # Calculate base positions. Handle empty graph.
     if abstract_graph.base_graph.number_of_nodes() > 0:
-        pos_base = _packed_kamada_kawai_layout(abstract_graph.base_graph)
+        pos_base = _packed_kamada_kawai_layout(
+            abstract_graph.base_graph,
+            undirected_layout=undirected_layout,
+            edge_label_attr=edge_label_attr,
+        )
     else:
         pos_base = {}
 
     # Calculate abstract positions. Handle empty graph.
     if abstract_graph.interpretation_graph.number_of_nodes() > 0:
-        pos_abstract = _packed_kamada_kawai_layout(abstract_graph.interpretation_graph)
+        pos_abstract = _packed_kamada_kawai_layout(
+            abstract_graph.interpretation_graph,
+            undirected_layout=undirected_layout,
+            edge_label_attr=edge_label_attr,
+        )
     else:
         pos_abstract = {}
 
@@ -700,6 +743,9 @@ def display(
         style=base_style,
         pos=pos_base,
         offset=(0, 0), # Explicitly no offset
+        node_labels=node_labels,
+        node_label_attr=node_label_attr,
+        node_label_font_size=node_label_font_size,
         edge_labels=edge_labels,
         edge_label_attr=edge_label_attr,
         edge_label_font_size=edge_label_font_size,
@@ -720,6 +766,9 @@ def display(
         style={**abstract_style, "node_edgecolors": abstract_edgecolors},
         pos=pos_abstract, # Pass original positions
         offset=(x_offset, 0), # Apply offset
+        node_labels=node_labels,
+        node_label_attr=node_label_attr,
+        node_label_font_size=node_label_font_size,
         edge_labels=edge_labels,
         edge_label_attr=edge_label_attr,
         edge_label_font_size=edge_label_font_size,
@@ -817,6 +866,7 @@ def display_graphs(
     edge_labels: Optional[bool] = None,
     edge_label_attr: str = 'label',
     edge_label_font_size: int = 7,
+    undirected_layout: bool = True,
 ):
     """
     Draw multiple graphs arranged in a grid.
@@ -840,6 +890,7 @@ def display_graphs(
             entries use their own display preference and NetworkX entries skip labels.
         edge_label_attr: Edge attribute name to use for labels (edges missing it are skipped).
         edge_label_font_size: Font size for edge labels.
+        undirected_layout: Use undirected distances for layout while retaining directed edges.
 
     Returns:
         Matplotlib Figure with a grid of subplots.
@@ -879,9 +930,13 @@ def display_graphs(
                     connection_style=connection_style,
                     ax=ax,
                     show_legend=show_legend,
+                    node_labels=node_labels,
+                    node_label_attr=node_label_attr,
+                    node_label_font_size=node_label_font_size,
                     edge_labels=edge_labels,
                     edge_label_attr=edge_label_attr,
                     edge_label_font_size=edge_label_font_size,
+                    undirected_layout=undirected_layout,
                 )
             else:
                 display_graph(
@@ -895,6 +950,7 @@ def display_graphs(
                     edge_labels=bool(edge_labels),
                     edge_label_attr=edge_label_attr,
                     edge_label_font_size=edge_label_font_size,
+                    undirected_layout=undirected_layout,
                 )
             if titles is not None and i < len(titles):
                 ax.set_title(str(titles[i]))

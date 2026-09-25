@@ -83,7 +83,7 @@ def vectorize(
     return M
 
 class AbstractGraphTransformer:
-    """Graph-level vectorizer using a decomposition function."""
+    """Graph-level vectorizer for base graphs or pre-built AbstractGraphs."""
 
     def __init__(self, 
                  nbits: int, 
@@ -98,7 +98,9 @@ class AbstractGraphTransformer:
 
         Args:
             nbits: Hash bit width used by vectorize.
-            decomposition_function: Function that decomposes an AbstractGraph.
+            decomposition_function: Function that decomposes an AbstractGraph
+                created from a base graph. Pre-built AbstractGraphs are used
+                directly and do not pass through this function.
             return_dense: Whether to return dense arrays.
             n_jobs: Joblib parallelism setting.
             backend: Optional joblib backend (e.g., "threading").
@@ -153,18 +155,22 @@ class AbstractGraphTransformer:
             graph: Input graph.
 
         Returns:
-            Any: 1 x n_features dense array or CSR matrix.
+            Any: 1 x n_features dense array or CSR matrix. Pre-built
+                AbstractGraphs retain their existing base/interpreted graph
+                data and attribute function during vectorization.
         """
-        # Create the AbstractGraph from the input graph using the provided graph.
-        # The following call creates an AbstractGraph and populates its interpretation graph.
         label_function = self.label_function or graph_hash_label_function_factory(
             nbits=self.nbits,
             hash_mode=self.hash_mode,
         )
-        ag = AbstractGraph(graph=graph, label_function=label_function)
-        ag.create_default_interpretation_node()
-        # Apply the provided decomposition function.
-        ag = self.decomposition_function(ag)
+        if isinstance(graph, AbstractGraph):
+            # Preserve the existing mappings and attribute function while
+            # avoiding mutation of the caller's AbstractGraph.
+            ag = graph.copy()
+        else:
+            ag = AbstractGraph(graph=graph, label_function=label_function)
+            ag.create_default_interpretation_node()
+            ag = self.decomposition_function(ag)
         # Vectorize the abstract graph.
         arr = vectorize(
             ag,
@@ -188,7 +194,8 @@ class AbstractGraphTransformer:
             y: Optional targets (unused).
 
         Returns:
-            Any: Stacked dense array or stacked CSR matrix.
+            Any: Stacked dense array or stacked CSR matrix, with one row per
+                input graph or pre-built AbstractGraph.
         """
         if self.backend == "dill":
             try:
