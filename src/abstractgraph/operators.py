@@ -7,7 +7,7 @@
 # HIGHER ORDER OPERATORS: add  compose  forward_compose  compose_product
 # CONDITIONAL OPERATORS: if_then_else  if_then_elif_else
 # ITERATION OPERATORS: for_loop  while_loop
-# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  shortest_path_cover  spine  graphlet  clique  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_mapped_subgraphs  intersection  combination  union_of_shortest_paths
+# UNARY OPERATORS: identity  random_part  node  edge  connected_component  degree  split  neighborhood  cycle  tree  path  shortest_path_cover  spine  graphlet  clique  triangle  complement  local_complement  edge_complement  local_edge_complement  betweenness_centrality  betweenness_centrality_split  betweenness_centrality_hop_split  low_cut_partition  merge  deduplicate  remove_redundant_mapped_subgraphs  intersection  combination  union_of_shortest_paths
 # META OPERATORS: name
 # EDGE OPERATORS: intersection_edges
 # FILTER OPERATORS: filter_by_number_of_connected_components  filter_by_number_of_nodes  filter_by_number_of_edges  filter_by_node_label  filter_by_edge_label  select_top_by_feature_ranking  connected_components_from_feature_ranking  filter_by_sampling
@@ -2784,6 +2784,20 @@ def clique(
         source_operator=clique,
         params={"number_of_nodes": number_of_nodes},
     )
+
+
+@curry
+def triangle(
+    abstract_graph: 'AbstractGraph',
+    param=None
+    ) -> 'AbstractGraph':
+    """Emit one interpretation node per 3-node clique (triangle).
+
+    This is a convenience wrapper around ``clique(number_of_nodes=(3, 3))``.
+    It therefore uses the same undirected clique semantics and provenance as
+    ``clique``.
+    """
+    return clique(number_of_nodes=(3, 3))(abstract_graph)
 
 #--------------------------------------------------------------------------------    
 @curry
@@ -5902,6 +5916,7 @@ _AG_OPERATORS = [
     spine,
     graphlet,
     clique,
+    triangle,
 
     # Unary graph transforms
     complement,
@@ -6000,6 +6015,7 @@ _DIRECTED_SUPPORT_BY_OPERATOR = {
 
     # These rely on algorithms whose semantics are undirected in this package.
     clique: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
+    triangle: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
     low_cut_partition: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
 }
 

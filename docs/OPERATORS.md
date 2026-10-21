@@ -22,6 +22,7 @@ Examples:
 - `neighborhood(radius=...)`: ego-graph mapped subgraphs
 - `cycle()`: cycle mapped subgraphs
 - `clique(number_of_nodes=...)`: clique mapped subgraphs
+- `triangle()`: 3-node clique mapped subgraphs, equivalent to `clique(number_of_nodes=(3, 3))`
 - `path(number_of_edges=...)`: bounded simple paths
 - `shortest_path_cover(n_edges=...)`: bounded shortest paths covering all edges
 
@@ -128,7 +129,7 @@ same_label_edges.directed_support = "preserve"
 
 - Structural decomposition:
   `node`, `edge`, `connected_component`, `neighborhood`, `cycle`, `tree`,
-  `path`, `graphlet`, `clique`
+  `path`, `graphlet`, `clique`, `triangle`
 - Partitioning and centrality:
   `split`, `betweenness_centrality`, `betweenness_centrality_split`
 - Combination and overlap:
@@ -167,11 +168,12 @@ The supported values are:
 Examples:
 
 ```python
-from abstractgraph.operators import clique, connected_component, cycle
+from abstractgraph.operators import clique, connected_component, cycle, triangle
 
 connected_component.directed_support  # "weak"
 cycle.directed_support                # "directed"
 clique.directed_support               # "undirected_only"
+triangle.directed_support             # "undirected_only"
 ```
 
 Curried operator instances keep the same metadata. Use
