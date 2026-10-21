@@ -22,7 +22,7 @@ Examples:
 - `neighborhood(radius=...)`: ego-graph mapped subgraphs
 - `cycle()`: cycle mapped subgraphs
 - `clique(number_of_nodes=...)`: clique mapped subgraphs
-- `triangle()`: 3-node clique mapped subgraphs, equivalent to `clique(number_of_nodes=(3, 3))`
+- `triangle()`: 3-node cliques; directed inputs are detected on an undirected view
 - `path(number_of_edges=...)`: bounded simple paths
 - `shortest_path_cover(n_edges=...)`: bounded shortest paths covering all edges
 
@@ -173,8 +173,13 @@ from abstractgraph.operators import clique, connected_component, cycle, triangle
 connected_component.directed_support  # "weak"
 cycle.directed_support                # "directed"
 clique.directed_support               # "undirected_only"
-triangle.directed_support             # "undirected_only"
+triangle.directed_support             # "weak"
 ```
+
+For a `DiGraph`, `triangle()` detects triangles after treating each directed
+edge as an undirected connection. Its mapped results are induced from the
+original directed graph, so arc directions and edge labels remain available to
+the graph hash function.
 
 Curried operator instances keep the same metadata. Use
 `get_directed_support()` when inspecting a partially applied operator, because

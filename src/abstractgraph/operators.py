@@ -2793,11 +2793,20 @@ def triangle(
     ) -> 'AbstractGraph':
     """Emit one interpretation node per 3-node clique (triangle).
 
-    This is a convenience wrapper around ``clique(number_of_nodes=(3, 3))``.
-    It therefore uses the same undirected clique semantics and provenance as
-    ``clique``.
+    Triangle membership is detected on an undirected view of each mapped
+    subgraph. Results are materialized from the original base graph, preserving
+    directed edge orientation and labels for downstream hashing.
     """
-    return clique(number_of_nodes=(3, 3))(abstract_graph)
+    return apply_local_node_decomposition(
+        abstract_graph,
+        lambda subgraph: clique_decomposition_function(
+            subgraph.to_undirected(as_view=True),
+            min_number_of_nodes=3,
+            max_number_of_nodes=3,
+        ),
+        source_operator=triangle,
+        params={"number_of_nodes": (3, 3)},
+    )
 
 #--------------------------------------------------------------------------------    
 @curry
@@ -6015,7 +6024,7 @@ _DIRECTED_SUPPORT_BY_OPERATOR = {
 
     # These rely on algorithms whose semantics are undirected in this package.
     clique: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
-    triangle: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
+    triangle: DIRECTED_SUPPORT_WEAK,
     low_cut_partition: DIRECTED_SUPPORT_UNDIRECTED_ONLY,
 }
 
