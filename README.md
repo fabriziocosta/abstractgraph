@@ -16,8 +16,8 @@ see [docs/ORGANIZATION.md](docs/ORGANIZATION.md).
 
 ## Zenodo
 
-Version 0.1.0: [10.5281/zenodo.24367037](https://doi.org/10.5281/zenodo.24367037)  
-All versions: [10.5281/zenodo.24367036](https://doi.org/10.5281/zenodo.24367036)
+[![Version DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24367037.svg)](https://doi.org/10.5281/zenodo.24367037)
+[![All versions DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24367036.svg)](https://doi.org/10.5281/zenodo.24367036)
 
 ## Core Idea
 
