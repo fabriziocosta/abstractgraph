@@ -6048,11 +6048,6 @@ try:
         except Exception:
             # Best-effort registration; ignore individual failures to avoid import-time crashes.
             pass
-    # Backward-compatibility alias: support legacy XML referring to 'pairwise_intersection'
-    try:
-        register_operator("pairwise_intersection")(intersection)
-    except Exception:
-        pass
 except Exception:
     # If XML module is unavailable, skip registration without failing import.
     pass

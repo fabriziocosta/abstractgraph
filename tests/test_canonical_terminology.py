@@ -14,7 +14,11 @@ from abstractgraph.graphs import (
 )
 from abstractgraph.hashing import hash_graph
 from abstractgraph.vectorize import AbstractGraphTransformer, vectorize
-from abstractgraph.xml import operator_from_xml_string, operator_to_xml_string
+from abstractgraph.xml import (
+    operator_from_xml_string,
+    operator_to_xml_string,
+    register_combiner,
+)
 
 
 def _make_graph() -> nx.Graph:
@@ -356,27 +360,15 @@ def test_graph_to_abstract_graph_preserves_edge_label_display_preference() -> No
     assert ag.copy().display_edge_labels is True
 
 
-def test_operator_label_mode_is_canonical_with_legacy_alias() -> None:
+def test_operator_label_mode_rejects_removed_alias() -> None:
     graph = _make_graph()
-
-    canonical = graph_to_abstract_graph(
-        graph,
-        decomposition_function=ops.node(),
-        nbits=6,
-        label_mode="operator",
-    )
-    legacy = graph_to_abstract_graph(
-        graph,
-        decomposition_function=ops.node(),
-        nbits=6,
-        label_mode="operator_hash",
-    )
-
-    assert canonical.label_function.label_mode == "operator"
-    assert legacy.label_function.label_mode == "operator"
-    assert [
-        data["label"] for _node, data in canonical.interpretation_graph.nodes(data=True)
-    ] == [data["label"] for _node, data in legacy.interpretation_graph.nodes(data=True)]
+    with pytest.raises(ValueError, match="Unknown label_mode"):
+        graph_to_abstract_graph(
+            graph,
+            decomposition_function=ops.node(),
+            nbits=6,
+            label_mode="operator_hash",
+        )
 
 
 def test_local_edge_complement_preserves_directed_orientation() -> None:
@@ -764,6 +756,23 @@ def test_shortest_path_cover_metadata_registry_xml_and_validation() -> None:
     with pytest.raises(ValueError, match="n_edges must be an integer >= 1"):
         ops.shortest_path_cover(n_edges=0)(ag)
 
+
+
+def test_product_operator_xml_uses_nested_canonical_combiner() -> None:
+    def add_values(left, right):
+        return left + right
+
+    register_combiner("test_add_values", add_values)
+    operator = ops.compose_product(add_values, ops.node())
+
+    xml = operator_to_xml_string(operator)
+    assert '<Combiner name="test_add_values"' in xml
+    assert ' combiner="' not in xml
+    rebuilt = operator_from_xml_string(xml)
+    assert operator_to_xml_string(rebuilt) == xml
+
+    with pytest.raises(KeyError):
+        operator_from_xml_string('<Operator type="product" />')
 
 def test_low_cut_partition_final_components_preserve_requested_overlap() -> None:
     graph = nx.Graph()

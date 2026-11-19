@@ -121,8 +121,7 @@ def _op_name(op: Any) -> str:
     if hasattr(op, "__name__") and isinstance(op.__name__, str) and op.__name__:
         return op.__name__
     if hasattr(op, "operator_type") and isinstance(op.operator_type, str) and op.operator_type:
-        # Map legacy/product tag to constructor name for round-trip
-        return "compose_product" if op.operator_type == "product" else op.operator_type
+        return op.operator_type
     if _is_curry_obj(op) and hasattr(op, "func") and hasattr(op.func, "__name__"):
         return op.func.__name__
     return type(op).__name__
@@ -318,28 +317,25 @@ def operator_to_xml_element(op: Any) -> ET.Element:
     for k, v in sorted(_op_bound_kwargs(op).items()):
         elem.set(k, _encode_param_value(v))
 
-    # combiner for compose_product
-    # Prefer legacy attribute when the combiner is a simple named function registered via COMBINER_REGISTRY.
-    # Otherwise (e.g., curried/parameterised operators like binary_combination(distance=...)),
-    # serialise as a nested <Combiner><Operator .../></Combiner> element for full round-trip of params.
+    # Serialize combiners as a nested element; registered functions use its name,
+    # while parameterized callables use a nested Operator.
     combiner_obj = getattr(op, "combiner", None)
     if combiner_obj is not None:
         bound_kwargs = _op_bound_kwargs(combiner_obj)
         is_curried = _is_curry_obj(combiner_obj)
         combiner_name = _maybe_combiner_name(op)
 
-        use_legacy_attr = (
+        combiner_elem = ET.SubElement(elem, "Combiner")
+        if (
             isinstance(combiner_name, str)
             and combiner_name in COMBINER_REGISTRY
             and not bound_kwargs
             and not is_curried
-        )
-
-        if use_legacy_attr:
-            elem.set("combiner", combiner_name)
+        ):
+            combiner_elem.set("name", combiner_name)
         else:
-            combiner_elem = ET.SubElement(elem, "Combiner")
             combiner_elem.append(operator_to_xml_element(combiner_obj))
+
 
     # Children (composition operands, or positional callables for loops, etc.)
     for child in _op_children(op):
@@ -476,30 +472,21 @@ def operator_from_xml_element(elem: ET.Element) -> Any:
         return _apply_metadata(op, annotation, reason_synthesis, op_name)
 
     # Product composition with combiner
-    if op_type == "compose_product" or op_type == "product":  # accept legacy tag
+    if op_type == "compose_product":
         builder = _resolve_operator_constructor("compose_product")
 
-        # Prefer legacy attribute path when present
-        comb_name = elem.attrib.get("combiner")
-        comb = None
-        if comb_name:
-            comb = _resolve_combiner(comb_name)
+        combiner_container = elem.find("Combiner")
+        if combiner_container is None:
+            raise ValueError("compose_product element missing nested <Combiner>")
+        combiner_name = combiner_container.attrib.get("name")
+        if combiner_name:
+            comb = _resolve_combiner(combiner_name)
         else:
-            # Look for nested <Combiner><Operator/></Combiner>
-            combiner_container = elem.find("Combiner")
-            if combiner_container is None:
-                raise ValueError("compose_product element missing combiner (no 'combiner' attribute or <Combiner> child)")
             inner = combiner_container.find("Operator")
             if inner is None:
-                raise ValueError("<Combiner> element missing nested <Operator>")
+                raise ValueError("<Combiner> element must name a registered combiner or contain <Operator>")
             comb = operator_from_xml_element(inner)
-
         op = builder(comb, *child_ops, **params)
-        if comb_name:
-            try:
-                op.combiner_name = comb_name  # type: ignore[attr-defined]
-            except Exception:
-                pass
         return _apply_metadata(op, annotation, reason_synthesis, op_name)
 
     # Conditional and loops — return a wrapped callable that receives ag first
